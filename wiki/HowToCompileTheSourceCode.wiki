@@ -6,4 +6,5 @@ You can compile the code with *MINGW* (http://sourceforge.net/project/showfiles.
 
 = Details =
    * Download and install MINGW
-   * a simple 'make' commond will produce the executable file
+   * Add the "mingw/bin" path to your $PATH variable
+   * Then a simple 'make' commond will produce the executable file
