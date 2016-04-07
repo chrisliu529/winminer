@@ -1,3 +1,3 @@
 all:
-	gcc mine.c -o mine -lgdi32
+	gcc mine.c -Wall -Werror -o mine
 
