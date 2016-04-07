@@ -1,0 +1,1 @@
+A small console tool to assist winmine game in windows XP in C code. It reads the layout of field by reading pixels and judge where the bombs are by analysing.

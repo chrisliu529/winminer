@@ -1,0 +1,10 @@
+This page describe how to compile the source code of winminer
+
+# Introduction #
+
+You can compile the code with **MINGW** (http://sourceforge.net/project/showfiles.php?group_id=2435)
+
+# Details #
+  * Download and install MINGW
+  * Add the "mingw/bin" path to your $PATH variable
+  * Then a simple 'make' commond will produce the executable file
