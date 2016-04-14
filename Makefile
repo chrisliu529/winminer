@@ -1,3 +1,2 @@
 all:
-	gcc mine.c -Wall -Werror -o mine
-
+	gcc mine.c -DLEVEL=$(level) -Wall -Werror -o mine-$(level)

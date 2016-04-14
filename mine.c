@@ -19,17 +19,11 @@
 #include <assert.h>
 #include <sys/time.h>
 
-#define N_MAX_ROW 16
-#define N_MAX_COLUMN 30
-#define N_MAX_ELEM (N_MAX_ROW * N_MAX_COLUMN)
-
 enum overState {
   NOT_OVER,
   BOMBED,
   WON
 };
-
-#define LEVEL 3
 
 #if LEVEL==1
 #define N_ROW 9
@@ -86,7 +80,7 @@ struct WeightRing {
   int weight;                 //number of bombs
 };
 
-static struct fieldBlock field[N_MAX_ROW][N_MAX_COLUMN];
+static struct fieldBlock field[N_ROW][N_COLUMN];
 
 static int unknownBlocks;
 static int unknownBombs;
