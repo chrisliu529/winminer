@@ -39,24 +39,24 @@ enum overState {
 #define N_ROW 16
 #define N_COLUMN 30
 #define N_BOMB 99
-#endif                          //#if LEVEL
+#endif //#if LEVEL
 
 #define N_ELEM (N_ROW * N_COLUMN)
-#define DEFAULT_REC "default.sav"
 
 #define ON_BOMB -1
 
 enum BlockState {
-  UNKNOWN,                    //the default state is it, this arrangement is more convenient for init 
+  UNKNOWN, //the default state is it, this arrangement is more convenient for init 
   BOMB,
   SAFE
 };
 
 struct fieldBlock {
-  int elem;                   //shown number in the block, only valid when digged
+  int elem; //shown number in the block, only valid when digged
   int digged;
-  enum BlockState state;      //only valid when not digged    
+  enum BlockState state; //only valid when not digged    
 };
+
 #define BLOCK_MARK_BOMB(row,col)	(field[(row)][(col)].state = BOMB)
 #define BLOCK_MARK_SAFE(row,col)	(field[(row)][(col)].state = SAFE)
 #define BLOCK_MARK_UNKNOWN(row,col)	(field[(row)][(col)].state = UNKNOWN)
@@ -150,7 +150,7 @@ int main()
 {
   int ret = 0;
   int row, col;
-  int i, nb, nw, nf, ar, t1, t2, ret2 = 0;
+  int nb, nw, nf, ar, t1, t2, ret2 = 0;
 
   restart();
   nb = 100;
@@ -160,7 +160,7 @@ int main()
   ar = 0;
   resetHitCounter();
   t1 = milliTime();
-  for (i = 0; i < nb; i++) {
+  for (int i = 0; i < nb; i++) {
     restart();
     ret = 0;
     while ((unknownBlocks > unknownBombs) && (ret != ON_BOMB)) {
