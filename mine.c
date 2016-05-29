@@ -19,12 +19,6 @@
 #include <assert.h>
 #include <sys/time.h>
 
-enum overState {
-  NOT_OVER,
-  BOMBED,
-  WON
-};
-
 #if LEVEL==1
 #define N_ROW 9
 #define N_COLUMN 9
@@ -84,7 +78,6 @@ static struct fieldBlock field[N_ROW][N_COLUMN];
 
 static int unknownBlocks;
 static int unknownBombs;
-static enum overState isOver;
 
 //auto miner result storage
 static struct Position safePos[100];
@@ -204,7 +197,6 @@ int restart(void)
   int ret;
 
   memset(field, 0, sizeof(field));
-  isOver = NOT_OVER;
   nSafe = 0;
   ret = generateField();
   return ret;
