@@ -85,7 +85,7 @@ static int nSafe = 0;
 
 //------interface
 static void generateBombs(void);
-static int countBombs(void);
+static void countBombs(void);
 static int sumNeighborBombs(int row, int column);
 
 void restart(void);
@@ -205,27 +205,10 @@ static int bombsInField(void)
   return n;
 }
 
-static int setBomb(int row, int column)
+static void setBomb(int row, int column)
 {
-  if (BLOCK_ELEM(row, column) == ON_BOMB) {
-    return -1;
-  }
-
+  assert(BLOCK_ELEM(row, column) != ON_BOMB);
   BLOCK_ELEM(row, column) = ON_BOMB;
-  return 0;
-}
-
-static int inPrev(int pp[], int bp, int len)
-{
-  int i;
-
-  for (i = 0; i < len; i++) {
-    if (pp[i] == bp) {
-      return 1;
-    }
-  }
-
-  return 0;
 }
 
 static void generateBombs(void)
@@ -233,8 +216,6 @@ static void generateBombs(void)
   int bombNum = N_BOMB;
   int elemNum = N_ELEM;
   int bombPos, i, ret;
-  int row, column;
-  int prevPos[N_BOMB];
   int pos[N_ELEM];
   int choice;
 
@@ -242,18 +223,11 @@ static void generateBombs(void)
   for (i = 0; i < N_ELEM; i++) {
     pos[i] = i;
   }
-  memset(prevPos, -1, sizeof(prevPos));
   while (bombNum > 0) {
     //insert a bomb
     choice = rand() % elemNum;
     bombPos = pos[choice];
-    assert(!inPrev(prevPos, bombPos, N_BOMB - bombNum));
-    prevPos[N_BOMB - bombNum] = bombPos;
-    row = bombPos / N_COLUMN;
-    assert(row < N_ROW);
-    column = bombPos % N_COLUMN;
-    ret = setBomb(row, column);
-    assert(ret == 0);
+    setBomb(bombPos / N_COLUMN, bombPos % N_COLUMN);
     //rearrange pos to avoid repeatly insert bomb in the same pos
     for (i = choice; i < elemNum - 1; i++) {
       pos[i] = pos[i + 1];
@@ -265,7 +239,7 @@ static void generateBombs(void)
   assert(ret == N_BOMB);
 }
 
-static int countBombs(void)
+static void countBombs(void)
 {
   int i, j, k;
 
@@ -277,8 +251,6 @@ static int countBombs(void)
       }
     }
   }
-
-  return 0;
 }
 
 static int sumNeighborBombs(int row, int col)
