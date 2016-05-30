@@ -84,16 +84,12 @@ static struct Position safePos[100];
 static int nSafe = 0;
 
 //------interface
-static int generateBombs(void);
+static void generateBombs(void);
 static int countBombs(void);
 static int sumNeighborBombs(int row, int column);
-static int dbgShowField2(void);
-void dbgShowField3(void);
 
-int restart(void);
+void restart(void);
 int isAvailRound(void);
-static int generateField(void);
-static int outputField(void);
 
 typedef int (*Condition) (int row, int col);
 static int getDigged(int row, int col);
@@ -140,30 +136,28 @@ int milliTime(void);
 
 int main()
 {
-  int ret = 0;
+  int ret, ret2;
   int row, col;
-  int nb = 100, nw = 0, nf = 0, ar = 0, ret2 = 0;
+  int nb = 100, nw = 0, nf = 0, ar = 0;
   int t1, t2;
 
+  srand(time(NULL));
   t1 = milliTime();
   for (int i = 0; i < nb; i++) {
     restart();
-    ret = 0;
+    ret = ret2 = 0;
     while ((unknownBlocks > unknownBombs) && (ret != ON_BOMB)) {
       ret2 = actAutomatic(&row, &col);
       ret = mineAt(row, col);
     }
-    if (isAvailRound()) {
-      ar++;
-    }
     if (ret == ON_BOMB) {
-      if (ret2 == 0) {
-        printf("internal judgement err.\r\n");
-        dbgShowField3();
-      }
+      assert(ret2 == -1); //it must be a guessed block!
       nf++;
     } else if (unknownBlocks == unknownBombs) {
       nw++;
+    }
+    if (isAvailRound()) {
+      ar++;
     }
   }
   t2 = milliTime();
@@ -185,25 +179,15 @@ int main()
   return 0;
 }
 
-int restart(void)
+void restart(void)
 {
-  int ret;
-
   memset(field, 0, sizeof(field));
   nSafe = 0;
-  ret = generateField();
-  return ret;
-}
-
-static int generateField(void)
-{
   //no bomb in field, everything is unknown
   unknownBombs = N_BOMB;
   unknownBlocks = N_ELEM;
   generateBombs();
   countBombs();
-
-  return 0;
 }
 
 static int bombsInField(void)
@@ -244,7 +228,7 @@ static int inPrev(int pp[], int bp, int len)
   return 0;
 }
 
-static int generateBombs(void)
+static void generateBombs(void)
 {
   int bombNum = N_BOMB;
   int elemNum = N_ELEM;
@@ -253,12 +237,7 @@ static int generateBombs(void)
   int prevPos[N_BOMB];
   int pos[N_ELEM];
   int choice;
-  static int bOnce = 0;
 
-  if (!bOnce) {
-    srand(time(NULL));
-    bOnce = 1;
-  }
   //init elements pos for ramdomly insert bomb
   for (i = 0; i < N_ELEM; i++) {
     pos[i] = i;
@@ -284,7 +263,6 @@ static int generateBombs(void)
   }
   ret = bombsInField();
   assert(ret == N_BOMB);
-  return 0;
 }
 
 static int countBombs(void)
@@ -303,30 +281,6 @@ static int countBombs(void)
   return 0;
 }
 
-static int dbgShowField2(void)
-{
-  int i, j;
-
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
-      printf("%2d ", field[i][j].elem);
-    }
-    printf("\n");
-  }
-
-  return 0;
-}
-
-void dbgShowField3(void)
-{
-  char buf[2];
-  outputField();
-  printf("-----------------------------------\n");
-  dbgShowField2();
-  fflush(stdin);
-  fgets(buf, 2, stdin);
-}
-
 static int sumNeighborBombs(int row, int col)
 {
   int i, nNearby;
@@ -341,23 +295,6 @@ static int sumNeighborBombs(int row, int col)
   }
 
   return bombSum;
-}
-
-static int outputField(void)
-{
-  int i, j;
-
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
-      if (field[i][j].digged) {
-        printf("%2d", field[i][j].elem);
-      } else {
-        printf("%2c", '?');
-      }
-    }
-    printf("\n");
-  }
-  return 0;
 }
 
 static int getNearbyBlocks(int row, int col, struct Position *nearby)
