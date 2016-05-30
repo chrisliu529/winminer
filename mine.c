@@ -136,22 +136,15 @@ static const SearchMethod sm[] =
 //-----bench
 static int nSureHit = 0;
 static int nGuessHit = 0;
-static void resetHitCounter(void);
 int milliTime(void);
 
 int main()
 {
   int ret = 0;
   int row, col;
-  int nb, nw, nf, ar, t1, t2, ret2 = 0;
+  int nb = 100, nw = 0, nf = 0, ar = 0, ret2 = 0;
+  int t1, t2;
 
-  restart();
-  nb = 100;
-
-  nf = 0;
-  nw = 0;
-  ar = 0;
-  resetHitCounter();
   t1 = milliTime();
   for (int i = 0; i < nb; i++) {
     restart();
@@ -200,12 +193,6 @@ int restart(void)
   nSafe = 0;
   ret = generateField();
   return ret;
-}
-
-static void resetHitCounter(void)
-{
-  nSureHit = 0;
-  nGuessHit = 0;
 }
 
 static int generateField(void)
