@@ -70,7 +70,7 @@ struct Position {
 struct WeightRing {
   struct Position center;
   struct Position pos[8];     //blocks around center
-  int num;                    //how many blocks valid in pos
+  int num;                    //number of valid blocks in pos
   int weight;                 //number of bombs
 };
 
@@ -194,10 +194,10 @@ void restart(void)
 
 static int bombsInField(void)
 {
-  int i, j, n = 0;
+  int n = 0;
 
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
+  for (int i = 0; i < N_ROW; i++) {
+    for (int j = 0; j < N_COLUMN; j++) {
       if (BLOCK_ELEM(i, j) == ON_BOMB) {
         n++;
       }
@@ -210,19 +210,19 @@ static int bombsInField(void)
 static void setBomb(int row, int column)
 {
   assert(row < N_ROW && column < N_COLUMN && BLOCK_ELEM(row, column) != ON_BOMB);
-  BLOCK_ELEM(row, column) = ON_BOMB;
+  BLOCK_SET_ELEM(row, column, ON_BOMB);
 }
 
 static void generateBombs(void)
 {
   int bombNum = N_BOMB;
   int elemNum = N_ELEM;
-  int bombPos, i;
+  int bombPos;
   int pos[N_ELEM];
   int choice;
 
   //init elements pos for ramdomly insert bomb
-  for (i = 0; i < N_ELEM; i++) {
+  for (int i = 0; i < N_ELEM; i++) {
     pos[i] = i;
   }
   while (bombNum > 0) {
@@ -231,7 +231,7 @@ static void generateBombs(void)
     bombPos = pos[choice];
     setBomb(bombPos / N_COLUMN, bombPos % N_COLUMN);
     //rearrange pos to avoid repeatly insert bomb in the same pos
-    for (i = choice; i < elemNum - 1; i++) {
+    for (int i = choice; i < elemNum - 1; i++) {
       pos[i] = pos[i + 1];
     }
     elemNum--;
@@ -241,12 +241,10 @@ static void generateBombs(void)
 
 static void markHints(void)
 {
-  int i, j, k;
-
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
+  for (int i = 0; i < N_ROW; i++) {
+    for (int j = 0; j < N_COLUMN; j++) {
       if (BLOCK_ELEM(i, j) == 0) {        //fill an indirective
-        k = sumNeighborBombs(i, j);
+        int k = sumNeighborBombs(i, j);
         BLOCK_SET_ELEM(i, j, k);
       }
     }
@@ -255,48 +253,46 @@ static void markHints(void)
 
 static int sumNeighborBombs(int row, int col)
 {
-  int i, nNearby;
+  int nNearby;
   struct Position nearby[8];
-  int bombSum = 0;
+  int sum = 0;
 
   nNearby = getNearbyBlocks(row, col, nearby);
-  for (i = 0; i < nNearby; i++) {
-    if (field[nearby[i].row][nearby[i].column].elem < 0) {
-      bombSum++;
+  for (int i = 0; i < nNearby; i++) {
+    if (BLOCK_ELEM(nearby[i].row, nearby[i].column) == ON_BOMB) {
+      sum++;
     }
   }
 
-  return bombSum;
+  return sum;
 }
 
 static int getNearbyBlocks(int row, int col, struct Position *nearby)
 {
-  int i, j;
-  int tmpRow, tmpCol;
-  int nBlock = 0;
-  int scanRow[3];
-  int scanCol[3];
+  int tr, tc;
+  int rows[3], cols[3];
   struct Position pos;
+  int nBlock = 0;
 
-  scanRow[0] = row - 1;
-  scanRow[1] = row;
-  scanRow[2] = row + 1;
+  rows[0] = row - 1;
+  rows[1] = row;
+  rows[2] = row + 1;
 
-  scanCol[0] = col - 1;
-  scanCol[1] = col;
-  scanCol[2] = col + 1;
+  cols[0] = col - 1;
+  cols[1] = col;
+  cols[2] = col + 1;
 
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
-      tmpRow = scanRow[i];
-      tmpCol = scanCol[j];
-      if (col == tmpCol && row == tmpRow) {       //do not count self in
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      tr = rows[i];
+      tc = cols[j];
+      if (row == tr && col == tc) {       //do not count self in
         continue;
       }
-      if ((tmpRow >= 0) && (tmpRow < N_ROW) &&
-          (tmpCol >= 0) && (tmpCol < N_COLUMN)) {
-        pos.row = tmpRow;
-        pos.column = tmpCol;
+      if ((tr >= 0) && (tr < N_ROW) &&
+          (tc >= 0) && (tc < N_COLUMN)) {
+        pos.row = tr;
+        pos.column = tc;
         nearby[nBlock++] = pos;
       }
     }
@@ -309,25 +305,22 @@ static int getNearbyBlocks(int row, int col, struct Position *nearby)
 static int detectBomb(int row, int col, int undigged,
                       struct Position *bombPos)
 {
-  int i, nNearby;
   struct Position nearby[8];
-  int tmpCol, tmpRow, nBomb = 0;
+  int tc, tr, n = 0;
 
-  assert(BLOCK_IS_DIGGED(row, col) && BLOCK_ELEM(row, col) > 0);
-
-  if (undigged == BLOCK_ELEM(row, col)) {     //it's clear that every block around it is bomb
-    nNearby = getNearbyBlocks(row, col, nearby);
-    for (i = 0; i < nNearby; i++) {
-      tmpCol = nearby[i].column;
-      tmpRow = nearby[i].row;
-      if (!BLOCK_IS_DIGGED(tmpRow, tmpCol)) {
-        BLOCK_MARK_BOMB(tmpRow, tmpCol);
-        bombPos[nBomb++] = nearby[i];
+  if (undigged == BLOCK_ELEM(row, col)) {     //all blocks around are bombs
+    int nNearby = getNearbyBlocks(row, col, nearby);
+    for (int i = 0; i < nNearby; i++) {
+      tc = nearby[i].column;
+      tr = nearby[i].row;
+      if (!BLOCK_IS_DIGGED(tr, tc)) {
+        BLOCK_MARK_BOMB(tr, tc);
+        bombPos[n++] = nearby[i];
       }
     }
   }
 
-  return nBomb;
+  return n;
 }
 
 static int insertSafe(const struct Position *pos)
@@ -431,7 +424,6 @@ static int chainOpen(int row, int col)
 
 static int actAutomatic(int *prow, int *pcol)
 {
-  int i, j, k;
   int undigged = 0;
   int foundBomb;
   struct Position bombPos[8];
@@ -454,19 +446,15 @@ static int actAutomatic(int *prow, int *pcol)
   do {
     rescan = 0;
     //find seed first, seed->bomb->safe
-    for (i = 0; i < N_ROW; i++) {
-      for (j = 0; j < N_COLUMN; j++) {
+    for (int i = 0; i < N_ROW; i++) {
+      for (int j = 0; j < N_COLUMN; j++) {
         if (BLOCK_IS_DIGGED(i, j) &&
             (BLOCK_ELEM(i, j) > 0) &&
-            (undigged =
-             getNearbyCond(i, j, NULL, getUndigged)) > 0) {
-          if ((foundBomb =
-               detectBomb(i, j, undigged, bombPos)) > 0) {
+            (undigged = getNearbyCond(i, j, NULL, getUndigged)) > 0) {
+          if ((foundBomb = detectBomb(i, j, undigged, bombPos)) > 0) {
             assert(foundBomb <= undigged);
-            for (k = 0; k < foundBomb; k++) {
-              if ((nSafe =
-                   detectSafe(bombPos[k].row,
-                              bombPos[k].column)) > 0) {
+            for (int k = 0; k < foundBomb; k++) {
+              if ((nSafe = detectSafe(bombPos[k].row, bombPos[k].column)) > 0) {
                 pos = safePos[--nSafe];
                 *pcol = pos.column;
                 *prow = pos.row;
@@ -479,14 +467,13 @@ static int actAutomatic(int *prow, int *pcol)
       }
     }
 
-#if 1
     //weight rings->superset rings->bomb/safe
-    for (i = 0; i < N_ROW; i++) {
-      for (j = 0; j < N_COLUMN; j++) {
+    for (int i = 0; i < N_ROW; i++) {
+      for (int j = 0; j < N_COLUMN; j++) {
         if (BLOCK_IS_DIGGED(i, j) &&
             (BLOCK_ELEM(i, j) > 0) && (makeRing(i, j, &wr) > 0)) {
           nRings = getSuperRings(&wr, rings);
-          for (k = 0; k < nRings; k++) {
+          for (int k = 0; k < nRings; k++) {
             if (rings[k].weight == wr.weight) {     //the other blocks are clear
               if ((nSafe =
                    detectRingSafe(&rings[k], &wr)) > 0) {
@@ -497,7 +484,6 @@ static int actAutomatic(int *prow, int *pcol)
                 return 0;
               }
             }
-#if 1
             else if (rings[k].weight > wr.weight) {
               subw = rings[k].weight - wr.weight;
               subn = rings[k].num - wr.num;
@@ -507,12 +493,10 @@ static int actAutomatic(int *prow, int *pcol)
                 rescan = 1;
               }
             }
-#endif
           }
         }
       }
     }
-#endif
   } while (rescan);
 
   //no absolutely safe block found, find a maybe safe block instead

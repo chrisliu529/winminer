@@ -2,5 +2,5 @@
 
 for level in `seq 1 3`;
 do
-    make level=${level}
+    make level=${level} || exit $?
 done
