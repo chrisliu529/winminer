@@ -69,9 +69,9 @@ struct Position {
 
 struct WeightRing {
   struct Position center;
-  struct Position pos[8];     //blocks around center
-  int num;                    //number of valid blocks in pos
-  int weight;                 //number of bombs
+  struct Position pos[8];     //unknown blocks around center
+  int num;                    //number of unknown blocks
+  int weight;                 //number of unknown bombs
 };
 
 static struct fieldBlock field[N_ROW][N_COLUMN];
@@ -107,7 +107,7 @@ static int detectBomb(int row, int col, int undigged,
                       struct Position *bombPos);
 static int getSuperRings(const struct WeightRing *wr,
                          struct WeightRing rings[]);
-static int insertSafe(const struct Position *pos);
+static void insertSafe(const struct Position *pos);
 static int detectRingSafe(const struct WeightRing *super,
                           const struct WeightRing *sub);
 static int detectRingBomb(const struct WeightRing *super,
@@ -323,59 +323,45 @@ static int detectBomb(int row, int col, int undigged,
   return n;
 }
 
-static int insertSafe(const struct Position *pos)
+static void insertSafe(const struct Position *pos)
 {
-  int i;
-
-  for (i = 0; i < nSafe; i++) {
+  for (int i = 0; i < nSafe; i++) {
     if (memcmp(&safePos[i], pos, sizeof(struct Position)) == 0) {   //already in safepos
-      return -1;
+      return;
     }
   }
-
   safePos[nSafe++] = *pos;
-  return 0;
 }
 
-int detectSafe(int row, int col)
+static void detectSafe(int row, int col)
 {
-  int i, j;
-  int nNearbyBomb;
-  struct Position nearbyBomb[8];
-  struct Position nearbyUndigged[8];
-  struct Position bombBlocks[8];
-  int tmpCol, tmpRow;
-  int nBomb = 0, nUndigged = 0;
+  int nNearbyBomb, nBomb = 0, nUndigged = 0;
+  struct Position nearbyBomb[8], nearbyUndigged[8], bombBlocks[8];
 
   assert(BLOCK_IS_BOMB(row, col));
   nNearbyBomb = getNearbyBlocks(row, col, nearbyBomb);
-  for (i = 0; i < nNearbyBomb; i++) {
-    tmpCol = nearbyBomb[i].column;
-    tmpRow = nearbyBomb[i].row;
-    if (BLOCK_IS_DIGGED(tmpRow, tmpCol)
-        && (BLOCK_ELEM(tmpRow, tmpCol) > 0)
-        &&
-        ((nUndigged =
-          getNearbyCond(tmpRow, tmpCol, nearbyUndigged,
-                        getUndigged)) > 0)) {
-      nBomb = getNearbyCond(tmpRow, tmpCol, bombBlocks, getBomb);
-      if ((nBomb == BLOCK_ELEM(tmpRow, tmpCol))
-          && (nUndigged > nBomb)) {
+  for (int i = 0; i < nNearbyBomb; i++) {
+    int tr = nearbyBomb[i].row;
+    int tc = nearbyBomb[i].column;
+    if (BLOCK_IS_DIGGED(tr, tc)
+        && (BLOCK_ELEM(tr, tc) > 0)
+        && ((nUndigged =
+	     getNearbyCond(tr, tc, nearbyUndigged, getUndigged)) > 0)) {
+      nBomb = getNearbyCond(tr, tc, bombBlocks, getBomb);
+      if ((nBomb == BLOCK_ELEM(tr, tc))
+	  && (nUndigged > nBomb)) {
         //filter the bomb from the undigged to get safe
-        for (j = 0; j < nUndigged; j++) {
-          if (!BLOCK_IS_BOMB
-              (nearbyUndigged[j].row,
-               nearbyUndigged[j].column)) {
-            BLOCK_MARK_SAFE(nearbyUndigged[j].row,
-                            nearbyUndigged[j].column);
+        for (int j = 0; j < nUndigged; j++) {
+	  int tr2 = nearbyUndigged[j].row;
+	  int tc2 = nearbyUndigged[j].column;
+          if (!BLOCK_IS_BOMB(tr2, tc2)) {
+            BLOCK_MARK_SAFE(tr2, tc2);
             insertSafe(&nearbyUndigged[j]);
           }
         }
       }
     }
   }
-
-  return nSafe;
 }
 
 static int mineAt(int row, int col)
@@ -429,17 +415,14 @@ static int actAutomatic(int *prow, int *pcol)
   struct Position bombPos[8];
   static struct Position pos;
   static int nGuess = 0;
-  struct WeightRing wr;
-  struct WeightRing rings[8];
-  int nRings;
-  int subn, subw;
   int rescan;
 
   //check if there're pre-calculated safe position
-  while (nSafe > 0) {
+  if (nSafe > 0) {
     pos = safePos[--nSafe];
     *pcol = pos.column;
     *prow = pos.row;
+    nSureHit++;
     return 0;
   }
 
@@ -454,7 +437,8 @@ static int actAutomatic(int *prow, int *pcol)
           if ((foundBomb = detectBomb(i, j, undigged, bombPos)) > 0) {
             assert(foundBomb <= undigged);
             for (int k = 0; k < foundBomb; k++) {
-              if ((nSafe = detectSafe(bombPos[k].row, bombPos[k].column)) > 0) {
+	      detectSafe(bombPos[k].row, bombPos[k].column);
+              if (nSafe > 0) {
                 pos = safePos[--nSafe];
                 *pcol = pos.column;
                 *prow = pos.row;
@@ -470,9 +454,12 @@ static int actAutomatic(int *prow, int *pcol)
     //weight rings->superset rings->bomb/safe
     for (int i = 0; i < N_ROW; i++) {
       for (int j = 0; j < N_COLUMN; j++) {
+	struct WeightRing wr;
         if (BLOCK_IS_DIGGED(i, j) &&
-            (BLOCK_ELEM(i, j) > 0) && (makeRing(i, j, &wr) > 0)) {
-          nRings = getSuperRings(&wr, rings);
+            (BLOCK_ELEM(i, j) > 0) &&
+	    (makeRing(i, j, &wr) > 0)) {
+	  struct WeightRing rings[8];
+          int nRings = getSuperRings(&wr, rings);
           for (int k = 0; k < nRings; k++) {
             if (rings[k].weight == wr.weight) {     //the other blocks are clear
               if ((nSafe =
@@ -485,8 +472,8 @@ static int actAutomatic(int *prow, int *pcol)
               }
             }
             else if (rings[k].weight > wr.weight) {
-              subw = rings[k].weight - wr.weight;
-              subn = rings[k].num - wr.num;
+              int subw = rings[k].weight - wr.weight;
+              int subn = rings[k].num - wr.num;
               if (subn == subw) { //the other blocks are bombs
                 foundBomb = detectRingBomb(&rings[k], &wr);
                 assert(foundBomb == subw);
@@ -499,7 +486,7 @@ static int actAutomatic(int *prow, int *pcol)
     }
   } while (rescan);
 
-  //no absolutely safe block found, find a maybe safe block instead
+  //no absolutely safe block found, try guessing a block
   //using four corner approaching
   (void) sm[(nGuess++) % 4] (prow, pcol);
   nGuessHit++;
@@ -639,26 +626,25 @@ static int getUnknown(int row, int col)
 static int getSuperRings(const struct WeightRing *wr,
                          struct WeightRing rings[])
 {
-  int m, i;
   struct Position centers[8];
-  struct WeightRing twr;
   int nr = 0;
 
   if (wr->weight > 5) {       //not possible to have a super ring
     return 0;
   }
 
-  m = getNearbyCond(wr->pos[0].row, wr->pos[0].column, centers,
+  int m = getNearbyCond(wr->pos[0].row, wr->pos[0].column, centers,
                     getDigged);
   if (m <= 1) {               //only the wr->center counted in
     return 0;
   }
-  for (i = 0; i < m; i++) {
+  for (int i = 0; i < m; i++) {
     if ((centers[i].row == wr->center.row) &&
         (centers[i].column == wr->center.column)) {
       continue;
     }
     if (centerMadeRing(&centers[i], wr->pos, wr->num)) {
+      struct WeightRing twr;
       makeRing(centers[i].row, centers[i].column, &twr);
       rings[nr++] = twr;
     }
@@ -694,10 +680,10 @@ static int makeRing(int i, int j, struct WeightRing *wr)
   wr->num = unknown;
   nBomb = getNearbyCond(i, j, NULL, getBomb);
   wr->weight = BLOCK_ELEM(i, j) - nBomb;
-  pos.column = j;
   pos.row = i;
+  pos.column = j;
   wr->center = pos;
-  return wr->num;
+  return unknown;
 }
 
 static int detectRingSafe(const struct WeightRing *super,
