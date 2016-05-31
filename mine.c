@@ -85,7 +85,8 @@ static int nSafe = 0;
 
 //------interface
 static void generateBombs(void);
-static void countBombs(void);
+static int bombsInField(void);
+static void markHints(void);
 static int sumNeighborBombs(int row, int column);
 
 void restart(void);
@@ -187,7 +188,8 @@ void restart(void)
   unknownBombs = N_BOMB;
   unknownBlocks = N_ELEM;
   generateBombs();
-  countBombs();
+  assert(bombsInField() == N_BOMB);
+  markHints();
 }
 
 static int bombsInField(void)
@@ -207,7 +209,7 @@ static int bombsInField(void)
 
 static void setBomb(int row, int column)
 {
-  assert(BLOCK_ELEM(row, column) != ON_BOMB);
+  assert(row < N_ROW && column < N_COLUMN && BLOCK_ELEM(row, column) != ON_BOMB);
   BLOCK_ELEM(row, column) = ON_BOMB;
 }
 
@@ -215,7 +217,7 @@ static void generateBombs(void)
 {
   int bombNum = N_BOMB;
   int elemNum = N_ELEM;
-  int bombPos, i, ret;
+  int bombPos, i;
   int pos[N_ELEM];
   int choice;
 
@@ -235,11 +237,9 @@ static void generateBombs(void)
     elemNum--;
     bombNum--;
   }
-  ret = bombsInField();
-  assert(ret == N_BOMB);
 }
 
-static void countBombs(void)
+static void markHints(void)
 {
   int i, j, k;
 
