@@ -623,8 +623,7 @@ static int getUnknown(int row, int col)
   return ((!BLOCK_IS_DIGGED(row, col)) && BLOCK_IS_UNKNOWN(row, col));
 }
 
-static int getSuperRings(const struct WeightRing *wr,
-                         struct WeightRing rings[])
+static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[])
 {
   struct Position centers[8];
   int nr = 0;
@@ -633,19 +632,19 @@ static int getSuperRings(const struct WeightRing *wr,
     return 0;
   }
 
-  int m = getNearbyCond(wr->pos[0].row, wr->pos[0].column, centers,
-                    getDigged);
+  int m = getNearbyCond(wr->pos[0].row, wr->pos[0].column, centers, getDigged);
   if (m <= 1) {               //only the wr->center counted in
     return 0;
   }
   for (int i = 0; i < m; i++) {
-    if ((centers[i].row == wr->center.row) &&
-        (centers[i].column == wr->center.column)) {
+    int r = centers[i].row;
+    int c = centers[i].column;
+    if ((r == wr->center.row) && (c == wr->center.column)) {
       continue;
     }
     if (centerMadeRing(&centers[i], wr->pos, wr->num)) {
       struct WeightRing twr;
-      makeRing(centers[i].row, centers[i].column, &twr);
+      makeRing(r, c, &twr);
       rings[nr++] = twr;
     }
   }
