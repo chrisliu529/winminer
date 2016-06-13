@@ -215,20 +215,18 @@ static void setBomb(int row, int column)
 
 static void generateBombs(void)
 {
-  int bombNum = N_BOMB;
-  int elemNum = N_ELEM;
-  int bombPos;
   int pos[N_ELEM];
-  int choice;
-
   //init elements pos for ramdomly insert bomb
   for (int i = 0; i < N_ELEM; i++) {
     pos[i] = i;
   }
+
+  int bombNum = N_BOMB;
+  int elemNum = N_ELEM;
   while (bombNum > 0) {
     //insert a bomb
-    choice = rand() % elemNum;
-    bombPos = pos[choice];
+    int choice = rand() % elemNum;
+    int bombPos = pos[choice];
     setBomb(bombPos / N_COLUMN, bombPos % N_COLUMN);
     //rearrange pos to avoid repeatly insert bomb in the same pos
     for (int i = choice; i < elemNum - 1; i++) {
@@ -253,11 +251,9 @@ static void markHints(void)
 
 static int sumNeighborBombs(int row, int col)
 {
-  int nNearby;
   struct Position nearby[8];
   int sum = 0;
-
-  nNearby = getNearbyBlocks(row, col, nearby);
+  int nNearby = getNearbyBlocks(row, col, nearby);
   for (int i = 0; i < nNearby; i++) {
     if (BLOCK_ELEM(nearby[i].row, nearby[i].column) == ON_BOMB) {
       sum++;
@@ -269,28 +265,25 @@ static int sumNeighborBombs(int row, int col)
 
 static int getNearbyBlocks(int row, int col, struct Position *nearby)
 {
-  int tr, tc;
   int rows[3], cols[3];
-  struct Position pos;
-  int nBlock = 0;
-
   rows[0] = row - 1;
   rows[1] = row;
   rows[2] = row + 1;
-
   cols[0] = col - 1;
   cols[1] = col;
   cols[2] = col + 1;
 
+  int nBlock = 0;
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      tr = rows[i];
-      tc = cols[j];
+      int tr = rows[i];
+      int tc = cols[j];
       if (row == tr && col == tc) {       //do not count self in
         continue;
       }
       if ((tr >= 0) && (tr < N_ROW) &&
           (tc >= 0) && (tc < N_COLUMN)) {
+	struct Position pos;
         pos.row = tr;
         pos.column = tc;
         nearby[nBlock++] = pos;
@@ -305,14 +298,13 @@ static int getNearbyBlocks(int row, int col, struct Position *nearby)
 static int detectBomb(int row, int col, int undigged,
                       struct Position *bombPos)
 {
-  struct Position nearby[8];
-  int tc, tr, n = 0;
-
+  int n = 0;
   if (undigged == BLOCK_ELEM(row, col)) {     //all blocks around are bombs
+    struct Position nearby[8];
     int nNearby = getNearbyBlocks(row, col, nearby);
     for (int i = 0; i < nNearby; i++) {
-      tc = nearby[i].column;
-      tr = nearby[i].row;
+      int tc = nearby[i].column;
+      int tr = nearby[i].row;
       if (!BLOCK_IS_DIGGED(tr, tc)) {
         BLOCK_MARK_BOMB(tr, tc);
         bombPos[n++] = nearby[i];
@@ -335,11 +327,11 @@ static void insertSafe(const struct Position *pos)
 
 static void detectSafe(int row, int col)
 {
-  int nNearbyBomb, nBomb = 0, nUndigged = 0;
-  struct Position nearbyBomb[8], nearbyUndigged[8], bombBlocks[8];
-
   assert(BLOCK_IS_BOMB(row, col));
-  nNearbyBomb = getNearbyBlocks(row, col, nearbyBomb);
+  int nBomb = 0, nUndigged = 0;
+  struct Position nearbyBomb[8], nearbyUndigged[8], bombBlocks[8];
+  int nNearbyBomb = getNearbyBlocks(row, col, nearbyBomb);
+
   for (int i = 0; i < nNearbyBomb; i++) {
     int tr = nearbyBomb[i].row;
     int tc = nearbyBomb[i].column;
@@ -375,7 +367,7 @@ static int mineAt(int row, int col)
 
   BLOCK_MARK_DIGGED(row, col);
 
-  //miner on bomb, game over
+  //mine at bomb, game over
   if (BLOCK_ELEM(row, col) == ON_BOMB) {
     ret = ON_BOMB;
   }
@@ -389,14 +381,11 @@ static int mineAt(int row, int col)
 
 static int chainOpen(int row, int col)
 {
-  int n, i;
   struct Position pos[8];
-  int tr, tc;
-
-  n = getNearbyCond(row, col, pos, getUndigged);
-  for (i = 0; i < n; i++) {
-    tr = pos[i].row;
-    tc = pos[i].column;
+  int n = getNearbyCond(row, col, pos, getUndigged);
+  for (int i = 0; i < n; i++) {
+    int tr = pos[i].row;
+    int tc = pos[i].column;
     if (!BLOCK_IS_DIGGED(tr, tc)) {
       BLOCK_MARK_DIGGED(tr, tc);
     }
@@ -753,11 +742,11 @@ int isAvailRound(void)
   return (N_ELEM - unknownBlocks >= N_ELEM * AVAIL_RATIO);
 }
 
-static int baseTime;
-static int bOnce = 1;
 int milliTime(void)
 {
   struct timeval tv;
+  static int baseTime;
+  static int bOnce = 1;
 
   if (bOnce) {
     baseTime = time(NULL);
