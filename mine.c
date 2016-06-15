@@ -99,17 +99,18 @@ static int getBomb(int row, int col);
 static int getUnknown(int row, int col);
 
 //-----analyse
-static int mineAt(int row, int col);
+static int mineAt(const struct Position *pos);
 static int chainOpen(int row, int col);
 static int getNearbyBlocks(int row, int col, struct Position *nearby);
-static int actAutomatic(int *prow, int *pcol);
+static int actAutomatic(struct Position *pos);
 static int detectBomb(int row, int col, int undigged,
                       struct Position *bombPos);
 static int getSuperRings(const struct WeightRing *wr,
                          struct WeightRing rings[]);
 static void insertSafe(const struct Position *pos);
-static int detectRingSafe(const struct WeightRing *super,
-                          const struct WeightRing *sub);
+static int fetchSafe(struct Position *pos);
+static void detectRingSafe(const struct WeightRing *super,
+			   const struct WeightRing *sub);
 static int detectRingBomb(const struct WeightRing *super,
                           const struct WeightRing *sub);
 static int centerMadeRing(const struct Position *center,
@@ -121,12 +122,12 @@ static int substractRing(const struct WeightRing *super,
 static int getNearbyCond(int row, int col, struct Position *pos,
                          Condition cond);
 
-typedef int (*SearchMethod) (int *prow, int *pcol);
-static int topLeft(int *prow, int *pcol);
-static int topRight(int *prow, int *pcol);
-static int bottomLeft(int *prow, int *pcol);
-static int bottomRight(int *prow, int *pcol);
-static int randomHit(int *prow, int *pcol);
+typedef void (*SearchMethod) (struct Position *pos);
+static void topLeft(struct Position *pos);
+static void topRight(struct Position *pos);
+static void bottomLeft(struct Position *pos);
+static void bottomRight(struct Position *pos);
+static void randomHit(struct Position *pos);
 static const SearchMethod sm[] =
   { topLeft, bottomRight, topRight, bottomLeft, randomHit };
 
@@ -135,10 +136,9 @@ static int nSureHit = 0;
 static int nGuessHit = 0;
 int milliTime(void);
 
-int main()
-{
+int main() {
   int ret, ret2;
-  int row, col;
+  struct Position pos;
   int nb = 100, nw = 0, nf = 0, ar = 0;
   int t1, t2;
 
@@ -148,8 +148,8 @@ int main()
     restart();
     ret = ret2 = 0;
     while ((unknownBlocks > unknownBombs) && (ret != ON_BOMB)) {
-      ret2 = actAutomatic(&row, &col);
-      ret = mineAt(row, col);
+      ret2 = actAutomatic(&pos);
+      ret = mineAt(&pos);
     }
     if (ret == ON_BOMB) {
       assert(ret2 == -1); //it must be a guessed block!
@@ -180,8 +180,7 @@ int main()
   return 0;
 }
 
-void restart(void)
-{
+void restart(void) {
   memset(field, 0, sizeof(field));
   nSafe = 0;
   //no bomb in field, everything is unknown
@@ -192,8 +191,7 @@ void restart(void)
   markHints();
 }
 
-static int bombsInField(void)
-{
+static int bombsInField(void) {
   int n = 0;
 
   for (int i = 0; i < N_ROW; i++) {
@@ -207,14 +205,12 @@ static int bombsInField(void)
   return n;
 }
 
-static void setBomb(int row, int column)
-{
+static void setBomb(int row, int column) {
   assert(row < N_ROW && column < N_COLUMN && BLOCK_ELEM(row, column) != ON_BOMB);
   BLOCK_SET_ELEM(row, column, ON_BOMB);
 }
 
-static void generateBombs(void)
-{
+static void generateBombs(void) {
   int pos[N_ELEM];
   //init elements pos for ramdomly insert bomb
   for (int i = 0; i < N_ELEM; i++) {
@@ -237,8 +233,7 @@ static void generateBombs(void)
   }
 }
 
-static void markHints(void)
-{
+static void markHints(void) {
   for (int i = 0; i < N_ROW; i++) {
     for (int j = 0; j < N_COLUMN; j++) {
       if (BLOCK_ELEM(i, j) == 0) {        //fill an indirective
@@ -249,8 +244,7 @@ static void markHints(void)
   }
 }
 
-static int sumNeighborBombs(int row, int col)
-{
+static int sumNeighborBombs(int row, int col) {
   struct Position nearby[8];
   int sum = 0;
   int nNearby = getNearbyBlocks(row, col, nearby);
@@ -263,8 +257,7 @@ static int sumNeighborBombs(int row, int col)
   return sum;
 }
 
-static int getNearbyBlocks(int row, int col, struct Position *nearby)
-{
+static int getNearbyBlocks(int row, int col, struct Position *nearby) {
   int rows[3], cols[3];
   rows[0] = row - 1;
   rows[1] = row;
@@ -296,8 +289,7 @@ static int getNearbyBlocks(int row, int col, struct Position *nearby)
 }
 
 static int detectBomb(int row, int col, int undigged,
-                      struct Position *bombPos)
-{
+                      struct Position *bombPos) {
   int n = 0;
   if (undigged == BLOCK_ELEM(row, col)) {     //all blocks around are bombs
     struct Position nearby[8];
@@ -315,8 +307,7 @@ static int detectBomb(int row, int col, int undigged,
   return n;
 }
 
-static void insertSafe(const struct Position *pos)
-{
+static void insertSafe(const struct Position *pos) {
   for (int i = 0; i < nSafe; i++) {
     if (memcmp(&safePos[i], pos, sizeof(struct Position)) == 0) {   //already in safepos
       return;
@@ -325,8 +316,16 @@ static void insertSafe(const struct Position *pos)
   safePos[nSafe++] = *pos;
 }
 
-static void detectSafe(int row, int col)
-{
+static int fetchSafe(struct Position *pos) {
+  if (nSafe > 0) {
+    *pos = safePos[--nSafe];
+    nSureHit++;
+    return 0;
+  }
+  return -1;
+}
+
+static void detectSafe(int row, int col) {
   assert(BLOCK_IS_BOMB(row, col));
   int nBomb = 0, nUndigged = 0;
   struct Position nearbyBomb[8], nearbyUndigged[8], bombBlocks[8];
@@ -356,9 +355,9 @@ static void detectSafe(int row, int col)
   }
 }
 
-static int mineAt(int row, int col)
-{
+static int mineAt(const struct Position *pos) {
   int ret = 0;
+  int row = pos->row, col = pos->column;
 
   //ignore if repeat mine at same place
   if (field[row][col].digged) {
@@ -379,8 +378,7 @@ static int mineAt(int row, int col)
   return ret;
 }
 
-static int chainOpen(int row, int col)
-{
+static int chainOpen(int row, int col) {
   struct Position pos[8];
   int n = getNearbyCond(row, col, pos, getUndigged);
   for (int i = 0; i < n; i++) {
@@ -397,21 +395,15 @@ static int chainOpen(int row, int col)
   return 0;
 }
 
-static int actAutomatic(int *prow, int *pcol)
-{
+static int actAutomatic(struct Position *pos) {
   int undigged = 0;
   int foundBomb;
   struct Position bombPos[8];
-  static struct Position pos;
   static int nGuess = 0;
   int rescan;
 
   //check if there're pre-calculated safe position
-  if (nSafe > 0) {
-    pos = safePos[--nSafe];
-    *pcol = pos.column;
-    *prow = pos.row;
-    nSureHit++;
+  if (fetchSafe(pos) == 0) {
     return 0;
   }
 
@@ -427,13 +419,9 @@ static int actAutomatic(int *prow, int *pcol)
             assert(foundBomb <= undigged);
             for (int k = 0; k < foundBomb; k++) {
               detectSafe(bombPos[k].row, bombPos[k].column);
-              if (nSafe > 0) {
-                pos = safePos[--nSafe];
-                *pcol = pos.column;
-                *prow = pos.row;
-                nSureHit++;
-                return 0;
-              }
+	      if (fetchSafe(pos) == 0) {
+		return 0;
+	      }
             }
           }
         }
@@ -451,14 +439,10 @@ static int actAutomatic(int *prow, int *pcol)
           int nRings = getSuperRings(&wr, rings);
           for (int k = 0; k < nRings; k++) {
             if (rings[k].weight == wr.weight) {     //the other blocks are clear
-              if ((nSafe =
-                   detectRingSafe(&rings[k], &wr)) > 0) {
-                pos = safePos[--nSafe];
-                *pcol = pos.column;
-                *prow = pos.row;
-                nSureHit++;
-                return 0;
-              }
+	      detectRingSafe(&rings[k], &wr);
+	      if (fetchSafe(pos) == 0) {
+		return 0;
+	      }
             }
             else if (rings[k].weight > wr.weight) {
               int subw = rings[k].weight - wr.weight;
@@ -477,86 +461,61 @@ static int actAutomatic(int *prow, int *pcol)
 
   //no absolutely safe block found, try guessing a block
   //using four corner approaching
-  (void) sm[(nGuess++) % 4] (prow, pcol);
+  sm[(nGuess++) % 4](pos);
   nGuessHit++;
   return -1;
 }
 
-static int topLeft(int *prow, int *pcol)
-{
-  int i, j;
-
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
+static void topLeft(struct Position *pos) {
+  for (int i = 0; i < N_ROW; i++) {
+    for (int j = 0; j < N_COLUMN; j++) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-        *pcol = j;
-        *prow = i;
-        return 0;
+        pos->row = i;
+        pos->column = j;
       }
     }
   }
-
-  return 0;
 }
 
-static int topRight(int *prow, int *pcol)
-{
-  int i, j;
-
-  for (i = 0; i < N_ROW; i++) {
-    for (j = N_COLUMN - 1; j > 0; j--) {
+static void topRight(struct Position *pos) {
+  for (int i = 0; i < N_ROW; i++) {
+    for (int j = N_COLUMN - 1; j > 0; j--) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-        *pcol = j;
-        *prow = i;
-        return 0;
+	pos->row = i;
+        pos->column = j;
       }
     }
   }
-
-  return 0;
 }
 
-static int bottomLeft(int *prow, int *pcol)
-{
-  int i, j;
-
-  for (i = N_ROW - 1; i > 0; i--) {
-    for (j = 0; j < N_COLUMN; j++) {
+static void bottomLeft(struct Position *pos) {
+  for (int i = N_ROW - 1; i > 0; i--) {
+    for (int j = 0; j < N_COLUMN; j++) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-        *pcol = j;
-        *prow = i;
-        return 0;
+	pos->row = i;
+        pos->column = j;
       }
     }
   }
-
-  return 0;
 }
 
-static int bottomRight(int *prow, int *pcol)
-{
-  int i, j;
-
-  for (i = N_ROW - 1; i > 0; i--) {
-    for (j = N_COLUMN - 1; j > 0; j--) {
+static void bottomRight(struct Position *pos) {
+  for (int i = N_ROW - 1; i > 0; i--) {
+    for (int j = N_COLUMN - 1; j > 0; j--) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-        *pcol = j;
-        *prow = i;
-        return 0;
+	pos->row = i;
+        pos->column = j;
       }
     }
   }
-
-  return 0;
 }
 
-static int randomHit(int *prow, int *pcol)
-{
-  int i, j, ti = -1, tj = -1;
+static void randomHit(struct Position *pos) {
+  int ti = -1, tj = -1;
   int n = 0;
 
-  for (i = 0; i < N_ROW; i++) {
-    for (j = 0; j < N_COLUMN; j++) {
+  for (int i = 0; i < N_ROW; i++) {
+    for (int j = 0; j < N_COLUMN; j++) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
         if (rand() % (++n) == 0) {
           tj = j;
@@ -567,14 +526,12 @@ static int randomHit(int *prow, int *pcol)
   }
 
   assert(ti >= 0 && tj >= 0);
-  *prow = ti;
-  *pcol = tj;
-  return 0;
+  pos->row = ti;
+  pos->column = tj;
 }
 
 static int getNearbyCond(int row, int col, struct Position *pos,
-                         Condition cond)
-{
+                         Condition cond) {
   int i, nNearby;
   struct Position nearby[8];
   int cnt = 0;
@@ -592,28 +549,23 @@ static int getNearbyCond(int row, int col, struct Position *pos,
   return cnt;
 }
 
-static int getDigged(int row, int col)
-{
+static int getDigged(int row, int col) {
   return BLOCK_IS_DIGGED(row, col);
 }
 
-static int getUndigged(int row, int col)
-{
+static int getUndigged(int row, int col) {
   return !BLOCK_IS_DIGGED(row, col);
 }
 
-static int getBomb(int row, int col)
-{
+static int getBomb(int row, int col) {
   return BLOCK_IS_BOMB(row, col);
 }
 
-static int getUnknown(int row, int col)
-{
+static int getUnknown(int row, int col) {
   return ((!BLOCK_IS_DIGGED(row, col)) && BLOCK_IS_UNKNOWN(row, col));
 }
 
-static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[])
-{
+static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[]) {
   struct Position centers[8];
   int nr = 0;
 
@@ -642,8 +594,7 @@ static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[])
 }
 
 static int centerMadeRing(const struct Position *center,
-                          const struct Position round[], int n)
-{
+                          const struct Position round[], int n) {
   int i;
 
   for (i = 0; i < n; i++) {
@@ -656,8 +607,7 @@ static int centerMadeRing(const struct Position *center,
   return 1;
 }
 
-static int makeRing(int i, int j, struct WeightRing *wr)
-{
+static int makeRing(int i, int j, struct WeightRing *wr) {
   int unknown, nBomb;
   struct Position pos;
 
@@ -674,9 +624,8 @@ static int makeRing(int i, int j, struct WeightRing *wr)
   return unknown;
 }
 
-static int detectRingSafe(const struct WeightRing *super,
-                          const struct WeightRing *sub)
-{
+static void detectRingSafe(const struct WeightRing *super,
+			   const struct WeightRing *sub) {
   struct WeightRing result;
   int n, i;
 
@@ -685,13 +634,10 @@ static int detectRingSafe(const struct WeightRing *super,
     BLOCK_MARK_SAFE(result.pos[i].row, result.pos[i].column);
     insertSafe(&result.pos[i]);
   }
-
-  return nSafe;
 }
 
 static int detectRingBomb(const struct WeightRing *super,
-                          const struct WeightRing *sub)
-{
+                          const struct WeightRing *sub) {
   struct WeightRing result;
   int n, i;
 
@@ -703,8 +649,7 @@ static int detectRingBomb(const struct WeightRing *super,
   return n;
 }
 
-static int inRing(const struct WeightRing *wr, const struct Position *pos)
-{
+static int inRing(const struct WeightRing *wr, const struct Position *pos) {
   int i;
 
   for (i = 0; i < wr->num; i++) {
@@ -719,8 +664,7 @@ static int inRing(const struct WeightRing *wr, const struct Position *pos)
 
 static int substractRing(const struct WeightRing *super,
                          const struct WeightRing *sub,
-                         struct WeightRing *result)
-{
+                         struct WeightRing *result) {
   int i;
   int n = 0;
 
@@ -737,13 +681,11 @@ static int substractRing(const struct WeightRing *super,
 }
 
 #define AVAIL_RATIO (0.1)
-int isAvailRound(void)
-{
+int isAvailRound(void) {
   return (N_ELEM - unknownBlocks >= N_ELEM * AVAIL_RATIO);
 }
 
-int milliTime(void)
-{
+int milliTime(void) {
   struct timeval tv;
   static int baseTime;
   static int bOnce = 1;
