@@ -283,7 +283,7 @@ static int getNearbyBlocks(int row, int col, struct Position *nearby)
       }
       if ((tr >= 0) && (tr < N_ROW) &&
           (tc >= 0) && (tc < N_COLUMN)) {
-	struct Position pos;
+        struct Position pos;
         pos.row = tr;
         pos.column = tc;
         nearby[nBlock++] = pos;
@@ -338,14 +338,14 @@ static void detectSafe(int row, int col)
     if (BLOCK_IS_DIGGED(tr, tc)
         && (BLOCK_ELEM(tr, tc) > 0)
         && ((nUndigged =
-	     getNearbyCond(tr, tc, nearbyUndigged, getUndigged)) > 0)) {
+             getNearbyCond(tr, tc, nearbyUndigged, getUndigged)) > 0)) {
       nBomb = getNearbyCond(tr, tc, bombBlocks, getBomb);
       if ((nBomb == BLOCK_ELEM(tr, tc))
-	  && (nUndigged > nBomb)) {
+          && (nUndigged > nBomb)) {
         //filter the bomb from the undigged to get safe
         for (int j = 0; j < nUndigged; j++) {
-	  int tr2 = nearbyUndigged[j].row;
-	  int tc2 = nearbyUndigged[j].column;
+          int tr2 = nearbyUndigged[j].row;
+          int tc2 = nearbyUndigged[j].column;
           if (!BLOCK_IS_BOMB(tr2, tc2)) {
             BLOCK_MARK_SAFE(tr2, tc2);
             insertSafe(&nearbyUndigged[j]);
@@ -426,7 +426,7 @@ static int actAutomatic(int *prow, int *pcol)
           if ((foundBomb = detectBomb(i, j, undigged, bombPos)) > 0) {
             assert(foundBomb <= undigged);
             for (int k = 0; k < foundBomb; k++) {
-	      detectSafe(bombPos[k].row, bombPos[k].column);
+              detectSafe(bombPos[k].row, bombPos[k].column);
               if (nSafe > 0) {
                 pos = safePos[--nSafe];
                 *pcol = pos.column;
@@ -443,11 +443,11 @@ static int actAutomatic(int *prow, int *pcol)
     //weight rings->superset rings->bomb/safe
     for (int i = 0; i < N_ROW; i++) {
       for (int j = 0; j < N_COLUMN; j++) {
-	struct WeightRing wr;
+        struct WeightRing wr;
         if (BLOCK_IS_DIGGED(i, j) &&
             (BLOCK_ELEM(i, j) > 0) &&
-	    (makeRing(i, j, &wr) > 0)) {
-	  struct WeightRing rings[8];
+            (makeRing(i, j, &wr) > 0)) {
+          struct WeightRing rings[8];
           int nRings = getSuperRings(&wr, rings);
           for (int k = 0; k < nRings; k++) {
             if (rings[k].weight == wr.weight) {     //the other blocks are clear
