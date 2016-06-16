@@ -110,7 +110,7 @@ static int getSuperRings(const struct WeightRing *wr,
 static void insertSafe(const struct Position *pos);
 static int fetchSafe(struct Position *pos);
 static void detectRingSafe(const struct WeightRing *super,
-			   const struct WeightRing *sub);
+                           const struct WeightRing *sub);
 static int detectRingBomb(const struct WeightRing *super,
                           const struct WeightRing *sub);
 static int centerMadeRing(const struct Position *center,
@@ -419,9 +419,9 @@ static int actAutomatic(struct Position *pos) {
             assert(foundBomb <= undigged);
             for (int k = 0; k < foundBomb; k++) {
               detectSafe(bombPos[k].row, bombPos[k].column);
-	      if (fetchSafe(pos) == 0) {
-		return 0;
-	      }
+              if (fetchSafe(pos) == 0) {
+                return 0;
+              }
             }
           }
         }
@@ -439,10 +439,10 @@ static int actAutomatic(struct Position *pos) {
           int nRings = getSuperRings(&wr, rings);
           for (int k = 0; k < nRings; k++) {
             if (rings[k].weight == wr.weight) {     //the other blocks are clear
-	      detectRingSafe(&rings[k], &wr);
-	      if (fetchSafe(pos) == 0) {
-		return 0;
-	      }
+              detectRingSafe(&rings[k], &wr);
+              if (fetchSafe(pos) == 0) {
+                return 0;
+              }
             }
             else if (rings[k].weight > wr.weight) {
               int subw = rings[k].weight - wr.weight;
@@ -481,7 +481,7 @@ static void topRight(struct Position *pos) {
   for (int i = 0; i < N_ROW; i++) {
     for (int j = N_COLUMN - 1; j > 0; j--) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-	pos->row = i;
+        pos->row = i;
         pos->column = j;
       }
     }
@@ -492,7 +492,7 @@ static void bottomLeft(struct Position *pos) {
   for (int i = N_ROW - 1; i > 0; i--) {
     for (int j = 0; j < N_COLUMN; j++) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-	pos->row = i;
+        pos->row = i;
         pos->column = j;
       }
     }
@@ -503,7 +503,7 @@ static void bottomRight(struct Position *pos) {
   for (int i = N_ROW - 1; i > 0; i--) {
     for (int j = N_COLUMN - 1; j > 0; j--) {
       if ((!BLOCK_IS_BOMB(i, j)) && (!BLOCK_IS_DIGGED(i, j))) {
-	pos->row = i;
+        pos->row = i;
         pos->column = j;
       }
     }
@@ -625,7 +625,7 @@ static int makeRing(int i, int j, struct WeightRing *wr) {
 }
 
 static void detectRingSafe(const struct WeightRing *super,
-			   const struct WeightRing *sub) {
+                           const struct WeightRing *sub) {
   struct WeightRing result;
   int n, i;
 
