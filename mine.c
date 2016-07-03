@@ -566,17 +566,17 @@ static int getUnknown(int row, int col) {
 }
 
 static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[]) {
-  struct Position centers[8];
-  int nr = 0;
-
   if (wr->weight > 5) {       //not possible to have a super ring
     return 0;
   }
 
+  struct Position centers[8];
   int m = getNearbyCond(wr->pos[0].row, wr->pos[0].column, centers, getDigged);
   if (m <= 1) {               //only the wr->center counted in
     return 0;
   }
+
+  int nr = 0;
   for (int i = 0; i < m; i++) {
     int r = centers[i].row;
     int c = centers[i].column;
@@ -589,35 +589,30 @@ static int getSuperRings(const struct WeightRing *wr, struct WeightRing rings[])
       rings[nr++] = twr;
     }
   }
-
   return nr;
 }
 
 static int centerMadeRing(const struct Position *center,
                           const struct Position round[], int n) {
-  int i;
-
-  for (i = 0; i < n; i++) {
+  for (int i = 0; i < n; i++) {
     if ((abs(center->row - round[i].row) > 1) ||
         (abs(center->column - round[i].column) > 1)) {
       return 0;
     }
   }
-
   return 1;
 }
 
 static int makeRing(int i, int j, struct WeightRing *wr) {
-  int unknown, nBomb;
-  struct Position pos;
-
-  unknown = getNearbyCond(i, j, wr->pos, getUnknown);
+  int unknown = getNearbyCond(i, j, wr->pos, getUnknown);
   if (unknown == 0) {
     return 0;
   }
   wr->num = unknown;
-  nBomb = getNearbyCond(i, j, NULL, getBomb);
+  int nBomb = getNearbyCond(i, j, NULL, getBomb);
   wr->weight = BLOCK_ELEM(i, j) - nBomb;
+
+  struct Position pos;
   pos.row = i;
   pos.column = j;
   wr->center = pos;
@@ -627,10 +622,8 @@ static int makeRing(int i, int j, struct WeightRing *wr) {
 static void detectRingSafe(const struct WeightRing *super,
                            const struct WeightRing *sub) {
   struct WeightRing result;
-  int n, i;
-
-  n = substractRing(super, sub, &result);
-  for (i = 0; i < n; i++) {
+  int n = substractRing(super, sub, &result);
+  for (int i = 0; i < n; i++) {
     BLOCK_MARK_SAFE(result.pos[i].row, result.pos[i].column);
     insertSafe(&result.pos[i]);
   }
@@ -639,41 +632,32 @@ static void detectRingSafe(const struct WeightRing *super,
 static int detectRingBomb(const struct WeightRing *super,
                           const struct WeightRing *sub) {
   struct WeightRing result;
-  int n, i;
-
-  n = substractRing(super, sub, &result);
-  for (i = 0; i < n; i++) {
+  int n = substractRing(super, sub, &result);
+  for (int i = 0; i < n; i++) {
     BLOCK_MARK_BOMB(result.pos[i].row, result.pos[i].column);
   }
-
   return n;
 }
 
 static int inRing(const struct WeightRing *wr, const struct Position *pos) {
-  int i;
-
-  for (i = 0; i < wr->num; i++) {
+  for (int i = 0; i < wr->num; i++) {
     if ((wr->pos[i].row == pos->row) &&
         (wr->pos[i].column == pos->column)) {
       return 1;
     }
   }
-
   return 0;
 }
 
 static int substractRing(const struct WeightRing *super,
                          const struct WeightRing *sub,
                          struct WeightRing *result) {
-  int i;
   int n = 0;
-
-  for (i = 0; i < super->num; i++) {
+  for (int i = 0; i < super->num; i++) {
     if (!inRing(sub, &super->pos[i])) {
       result->pos[n++] = super->pos[i];
     }
   }
-
   result->num = n;
   result->weight = super->weight - sub->weight;
   assert(result->weight >= 0);
@@ -694,8 +678,6 @@ int milliTime(void) {
     baseTime = time(NULL);
     bOnce = 0;
   }
-
   gettimeofday(&tv, NULL);
-
   return (tv.tv_sec - baseTime)*1000 + tv.tv_usec/1000;
 }
