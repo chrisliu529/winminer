@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -86,6 +87,7 @@ func runBench(filename string) {
 		mines := strings.Split(lines[i], ",")
 		if len(mines) > 1 { //ignore empty lines
 			board := initBoard(toInt(mines))
+			fmt.Println(board)
 			player := initPlayer(board.level)
 			player.play(board)
 		}
@@ -103,8 +105,7 @@ func initBoard(mines []int) *Board {
 	level, err := getLevel(len(mines))
 	check(err)
 	b := &Board{level: level}
-	err = b.setMines(mines)
-	check(err)
+	b.setMines(mines)
 	return b
 }
 
@@ -118,17 +119,91 @@ func toInt(ss []string) []int {
 	return res
 }
 
-func (b *Board) setMines(mines []int) error {
+func (b *Board) setMines(mines []int) {
 	b.initTiles()
-	return nil
+	for _, mine := range mines {
+		b.setMine(mine)
+	}
+	b.setHints()
+}
+
+func (b *Board) setHints() {
+	for y := range b.tiles {
+		for x := range b.tiles[y] {
+			if b.tiles[y][x] != 0 {
+				continue
+			}
+			neighbors := b.getNeighbors(x, y)
+			for _, t := range neighbors {
+				if t.isMine() {
+					b.tiles[y][x]++
+				}
+			}
+		}
+	}
+}
+
+func (b *Board) getNeighbors(x, y int) []*TileInt {
+	r, c := len(b.tiles), len(b.tiles[0])
+	tiles := []*TileInt{}
+	if x+1 < c {
+		tiles = append(tiles, &b.tiles[y][x+1])
+	}
+	if x-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y][x-1])
+	}
+	if y+1 < r {
+		tiles = append(tiles, &b.tiles[y+1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y+1][x+1])
+		}
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y+1][x-1])
+		}
+	}
+	if y-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y-1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y-1][x+1])
+		}
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y-1][x-1])
+		}
+	}
+	return tiles
+}
+
+func (b *Board) setMine(mine int) {
+	x, y := toXY(mine, len(b.tiles))
+	b.tiles[y][x] = -1
+}
+
+func toXY(mine, column int) (int, int) {
+	return mine % column, mine / column
 }
 
 func (b *Board) initTiles() {
 	row, col := getDims(b.level)
-	b.tiles = make([][]TileInt, col)
+	b.tiles = make([][]TileInt, row)
 	for i := range b.tiles {
-		b.tiles[i] = make([]TileInt, row)
+		t := make([]TileInt, col)
+		for j := range t {
+			t[j] = 0
+		}
+		b.tiles[i] = t
 	}
+}
+
+func (b *Board) String() string {
+	var buf bytes.Buffer
+	for y := range b.tiles {
+		fmt.Println(&buf, b.tiles[y])
+	}
+	return buf.String()
+}
+
+func (t *TileInt) isMine() bool {
+	return *t == -1
 }
 
 func getDims(level int) (int, int) {
