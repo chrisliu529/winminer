@@ -5,8 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"image"
+	"image/png"
 	"io/ioutil"
+	"log"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -21,6 +25,7 @@ var (
 	levelConfigs = []LevelConfig{
 		{9, 9, 10},
 	}
+	images map[string]image.Image
 )
 
 func main() {
@@ -35,8 +40,29 @@ func main() {
 		level := flag.Int("lv", 1, "game level (1-3)")
 		genBench(*n, *s, *level)
 	} else {
+		images = loadImages()
 		runBench(*f)
 	}
+}
+
+func loadImages() map[string]image.Image {
+	res := make(map[string]image.Image)
+	files := []string{
+		"0", "1", "2", "3", "4", "5", "6", "7", "8",
+		"bomb_gray", "bomb_red", "flag",
+		"unknown", "uncertain",
+	}
+	for _, f := range files {
+		filename := fmt.Sprintf("%s.png", f)
+		path := "image/" + filename
+		file, err := os.Open(path)
+		check(err)
+		defer file.Close()
+		img, _, err := image.Decode(file)
+		check(err)
+		res[filename] = img
+	}
+	return res
 }
 
 func genBench(n, s, level int) {
@@ -75,7 +101,7 @@ func remove(slice []int, i int) []int {
 
 func check(e error) {
 	if e != nil {
-		panic(e)
+		log.Fatal(e)
 	}
 }
 
@@ -88,6 +114,7 @@ func runBench(filename string) {
 		if len(mines) > 1 { //ignore empty lines
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
+			board.dump(fmt.Sprintf("%d.png", i))
 			player := initPlayer(board.level)
 			player.play(board)
 		}
@@ -200,6 +227,34 @@ func (b *Board) String() string {
 		fmt.Println(&buf, b.tiles[y])
 	}
 	return buf.String()
+}
+
+func (b *Board) dump(outpath string) {
+	file, err := os.Create(outpath)
+	check(err)
+	defer file.Close()
+	row, col := getDims(b.level)
+	width, height := 16*col, 16*row
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := range b.tiles {
+		for x, v := range b.tiles[y] {
+			imgFile := "bomb_gray.png"
+			if v >= 0 {
+				imgFile = fmt.Sprintf("%d.png", v)
+			}
+			render_to(img, 16*x, 16*y, imgFile)
+		}
+	}
+	png.Encode(file, img)
+}
+
+func render_to(img *image.RGBA, x int, y int, filename string) {
+	srcImg := images[filename]
+	for i := 0; i < 16; i++ {
+		for j := 0; j < 16; j++ {
+			img.Set(x+i, y+j, srcImg.At(i, j))
+		}
+	}
 }
 
 func (t *TileInt) isMine() bool {
