@@ -84,11 +84,10 @@ func genBenchCase(level int, rng *rand.Rand) {
 	}
 	for i := 0; i < mine; i++ {
 		mineTile := rng.Intn(len(mineCandidates))
-		if i == 0 {
-			fmt.Printf("%d", mineTile)
-		} else {
-			fmt.Printf(",%d", mineTile)
+		if i > 0 {
+			fmt.Printf(",")
 		}
+		fmt.Printf("%d", mineTile)
 		remove(mineCandidates, mineTile)
 	}
 	fmt.Print("\n")
@@ -115,23 +114,27 @@ func runBench(filename string) {
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
 			board.dump(fmt.Sprintf("%d.png", i))
-			player := initPlayer(board.level)
+			player := initPlayer(board)
 			player.play(board)
+			player.dump(fmt.Sprintf("p%d.png", i))
 		}
 	}
 }
 
 type TileInt int
 type Board struct {
-	tiles [][]TileInt
-	level int
+	tiles  [][]TileInt
+	level  int
+	row    int
+	col    int
+	status int
 }
 
 func initBoard(mines []int) *Board {
 	fmt.Println("init board with ", mines, len(mines))
 	level, err := getLevel(len(mines))
 	check(err)
-	b := &Board{level: level}
+	b := &Board{level: level, status: 0}
 	b.setMines(mines)
 	return b
 }
@@ -210,10 +213,10 @@ func toXY(mine, column int) (int, int) {
 }
 
 func (b *Board) initTiles() {
-	row, col := getDims(b.level)
-	b.tiles = make([][]TileInt, row)
+	b.row, b.col = getDims(b.level)
+	b.tiles = make([][]TileInt, b.row)
 	for i := range b.tiles {
-		t := make([]TileInt, col)
+		t := make([]TileInt, b.col)
 		for j := range t {
 			t[j] = 0
 		}
@@ -233,8 +236,7 @@ func (b *Board) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	row, col := getDims(b.level)
-	width, height := 16*col, 16*row
+	width, height := 16*b.col, 16*b.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range b.tiles {
 		for x, v := range b.tiles[y] {
@@ -242,14 +244,17 @@ func (b *Board) dump(outpath string) {
 			if v >= 0 {
 				imgFile = fmt.Sprintf("%d.png", v)
 			}
-			render_to(img, 16*x, 16*y, imgFile)
+			render(img, 16*x, 16*y, imgFile)
 		}
 	}
 	png.Encode(file, img)
 }
 
-func render_to(img *image.RGBA, x int, y int, filename string) {
+func render(img *image.RGBA, x int, y int, filename string) {
 	srcImg := images[filename]
+	if srcImg == nil {
+		log.Fatal(fmt.Sprintf("image %s not loaded", filename))
+	}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
 			img.Set(x+i, y+j, srcImg.At(i, j))
@@ -275,18 +280,109 @@ func getLevel(n int) (level int, err error) {
 	return level, errors.New("Level not found")
 }
 
-type TileExt int
+type TileExt struct {
+	value    TileInt
+	revealed bool
+}
+
+const (
+	Unknown = 10 + iota
+	Boom    //mine clicked, game over
+	Flag    //mine marked
+	Win
+)
+
 type Player struct {
 	tiles [][]TileExt
 	sure  int
 	guess int
+	row   int
+	col   int
 }
 
-func initPlayer(level int) *Player {
-	fmt.Println("init player with level ", level)
-	return &Player{}
+func initPlayer(b *Board) *Player {
+	fmt.Println("init player with level ", b.level)
+	p := &Player{sure: 0, guess: 0}
+	p.initTiles(b)
+	return p
+}
+
+func (p *Player) initTiles(b *Board) {
+	p.row, p.col = b.row, b.col
+	p.tiles = make([][]TileExt, p.row)
+	for i := range p.tiles {
+		t := make([]TileExt, p.col)
+		for j := range t {
+			t[j].value = Unknown
+			t[j].revealed = false
+		}
+		p.tiles[i] = t
+	}
 }
 
 func (p *Player) play(b *Board) {
-	fmt.Println("playing")
+	fmt.Println("playing by random clicks")
+	rng := rand.New(rand.NewSource(int64(123)))
+	for b.status == 0 {
+		x, y := p.check(b, rng)
+		p.click(b, x, y)
+	}
+}
+
+func (p *Player) check(b *Board, rng *rand.Rand) (int, int) {
+	fmt.Println("player is checking board")
+	if p.sure == 0 {
+		//always click the middle of board for the first step
+		p.sure++
+		return 5, 5
+	}
+	return rng.Intn(b.col), rng.Intn(b.row)
+}
+
+func (p *Player) click(b *Board, x, y int) {
+	if y >= b.row || y < 0 || x < 0 || x >= b.col {
+		return
+	}
+	fmt.Println(y, x)
+	if p.tiles[y][x].revealed {
+		return
+	}
+	t := b.tiles[y][x]
+	p.tiles[y][x].value = t
+	p.tiles[y][x].revealed = true
+	if t.isMine() {
+		p.tiles[y][x].value = Boom
+		b.status = Boom
+		return
+	}
+
+	if t == 0 {
+		p.click(b, x-1, y)
+		p.click(b, x+1, y)
+		p.click(b, x, y-1)
+		p.click(b, x, y+1)
+	}
+}
+
+func (p *Player) dump(outpath string) {
+	file, err := os.Create(outpath)
+	check(err)
+	defer file.Close()
+	width, height := 16*p.col, 16*p.row
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := range p.tiles {
+		for x, t := range p.tiles[y] {
+			imgFile := "unknown.png"
+			if t.revealed {
+				v := t.value
+				if v >= 0 && v <= 8 {
+					imgFile = fmt.Sprintf("%d.png", v)
+				} else if v == Boom {
+					imgFile = "bomb_red.png"
+				}
+			}
+			render(img, 16*x, 16*y, imgFile)
+		}
+	}
+	png.Encode(file, img)
 }
