@@ -127,6 +127,7 @@ type Board struct {
 	level  int
 	row    int
 	col    int
+	mine   int
 	status int
 }
 
@@ -213,7 +214,8 @@ func toXY(mine, column int) (int, int) {
 }
 
 func (b *Board) initTiles() {
-	b.row, b.col = getDims(b.level)
+	c := levelConfigs[b.level-1]
+	b.row, b.col, b.mine = c.row, c.column, c.mine
 	b.tiles = make([][]TileInt, b.row)
 	for i := range b.tiles {
 		t := make([]TileInt, b.col)
@@ -266,11 +268,6 @@ func (t *TileInt) isMine() bool {
 	return *t == -1
 }
 
-func getDims(level int) (int, int) {
-	c := levelConfigs[level-1]
-	return c.row, c.column
-}
-
 func getLevel(n int) (level int, err error) {
 	for i := 0; i < len(levelConfigs); i++ {
 		if n == levelConfigs[i].mine {
@@ -294,21 +291,23 @@ const (
 
 type Player struct {
 	tiles [][]TileExt
+	pm    [][]float32 //probility matrix
 	sure  int
 	guess int
 	row   int
 	col   int
+	mine  int
 }
 
 func initPlayer(b *Board) *Player {
 	fmt.Println("init player with level ", b.level)
 	p := &Player{sure: 0, guess: 0}
-	p.initTiles(b)
+	p.init(b)
 	return p
 }
 
-func (p *Player) initTiles(b *Board) {
-	p.row, p.col = b.row, b.col
+func (p *Player) init(b *Board) {
+	p.row, p.col, p.mine = b.row, b.col, b.mine
 	p.tiles = make([][]TileExt, p.row)
 	for i := range p.tiles {
 		t := make([]TileExt, p.col)
@@ -318,6 +317,17 @@ func (p *Player) initTiles(b *Board) {
 		}
 		p.tiles[i] = t
 	}
+
+	p.pm = make([][]float32, p.row)
+	n := p.row * p.col
+	for i := range p.tiles {
+		t := make([]float32, p.col)
+		for j := range t {
+			t[j] = float32(p.mine) / float32(n)
+		}
+		p.pm[i] = t
+	}
+
 }
 
 func (p *Player) play(b *Board) {
