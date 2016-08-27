@@ -327,7 +327,6 @@ func (p *Player) init(b *Board) {
 func (p *Player) play(b *Board) {
 	step := 0
 	click_f := func(x, y int) {
-		fmt.Println("try click0 (%d, %d)=%s", x, y, p.tiles[y][x])
 		if p.tiles[y][x].value == Unknown {
 			p.sure++
 			p.click(b, x, y)
@@ -351,11 +350,19 @@ func (p *Player) play(b *Board) {
 			prev_safe = make([]int, len(safe))
 			copy(prev_safe, safe)
 			for _, v := range safe {
-				fmt.Printf("try click v=%d\n", v)
 				click_f(toXY(v, p.col))
 			}
 		}
 	}
+}
+
+func inSlice(i int, s []int) bool {
+	for _, e := range s {
+		if i == e {
+			return true
+		}
+	}
+	return false
 }
 
 func compareSlice(s1, s2 []int) bool {
@@ -430,6 +437,10 @@ func (p *Player) circle(x, y, v int) (*intset.IntSet, int) {
 	return &s, v
 }
 
+func isUnknown(t *TileExt) bool {
+	return t.value == Unknown
+}
+
 func (p *Player) findSafe() ([]int, error) {
 	stateChanged := true
 	safe := []int{}
@@ -445,15 +456,24 @@ func (p *Player) findSafe() ([]int, error) {
 					x, y := toXY(e, p.col)
 					if p.tiles[y][x].value != Flag {
 						p.tiles[y][x].value = Flag
+						p.mine --
+						if (p.mine == 0) {
+							return p.collect(isUnknown), nil
+						}
 						stateChanged = true
 					}
 				}
 			} else if (v == 0) {
 				for _, e := range s.Elems() {
-					safe = append(safe, e)
+					if ! inSlice(e, safe) {
+						safe = append(safe, e)
+					}
 				}
 			}
 		}
+	}
+	if (len(safe) == 0) {
+		safe = p.findIsle()
 	}
 	if (len(safe) == 0) {
 		return safe, fmt.Errorf("ai has to guess")
@@ -461,16 +481,91 @@ func (p *Player) findSafe() ([]int, error) {
 	return safe, nil
 }
 
+type IsleContext struct {
+	player *Player
+	mine   int
+	isle   []int
+}
+
+func (ic *IsleContext) solve() ([]int, error) {
+	return nil, fmt.Errorf("Not Implemented")
+}
+
+func (p *Player) findIsle() []int {
+	fmt.Printf("remained mines=%d, locating the isle\n", p.mine)
+	empty := []int{}
+	isle := p.isle()
+	us := p.collect(isUnknown)
+	if len(us) == len(isle) {
+		fmt.Printf("isle located: %v. Try mines (%d) simulations\n", isle, p.mine)
+		ic := &IsleContext{player: p, mine: p.mine, isle: isle}
+		safe, err := ic.solve()
+		if err != nil {
+			fmt.Println("isle: ", err)
+			return empty
+		}
+		return safe
+	}
+	return empty
+}
+
+func (p *Player) isle() []int {
+	x, y := p.one(isUnknown)
+	visited := make(map[int]bool)
+	result := []int{}
+	p.isle0(x, y, &result, visited)
+	return result
+}
+
+func (p *Player) isle0(x, y int, result *[]int, visited map[int]bool) {
+	if y >= p.row || y < 0 || x < 0 || x >= p.col {
+		return
+	}
+	i := toIndex(x, y, p.col)
+	if visited[i] {
+		return
+	}
+	visited[i] = true
+	if p.tiles[y][x].value == Unknown {
+		*result = append(*result, i)
+		p.isle0(x - 1, y, result, visited)
+		p.isle0(x + 1, y, result, visited)
+		p.isle0(x, y - 1, result, visited)
+		p.isle0(x, y + 1, result, visited)
+	}
+}
+
+func (p *Player) one(filter func(*TileExt) bool) (int, int) {
+	for y := range p.tiles {
+		for x := range p.tiles[y] {
+			if filter(&p.tiles[y][x]) {
+				return x, y
+			}
+		}
+	}
+	return -1, -1
+}
+
+func (p *Player) collect(filter func(*TileExt) bool) []int {
+	res := []int{}
+	for y := range p.tiles {
+		for x := range p.tiles[y] {
+			if filter(&p.tiles[y][x]) {
+				res = append(res, toIndex(x, y, p.col))
+			}
+		}
+	}
+	return res
+}
+
 func (p *Player) click(b *Board, x, y int) {
-	fmt.Printf("try click1 x=%d y=%d\n", x, y)
 	if y >= b.row || y < 0 || x < 0 || x >= b.col {
 		return
 	}
-	fmt.Println("try click2", p.tiles[y][x])
 	if p.tiles[y][x].revealed {
 		return
 	}
-	fmt.Printf("effective click: (%d, %d)\n", x, y)
+	fmt.Printf("click at (%d, %d)\n", x, y)
 	t := b.tiles[y][x]
 	p.tiles[y][x].value = int(t)
 	p.tiles[y][x].revealed = true
