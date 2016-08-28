@@ -333,28 +333,37 @@ func (p *Player) play(b *Board) {
 			p.dump(fmt.Sprintf("p%d.png", step))
 			step ++
 		}
-		if p.mine == 0 {
-			b.status = Win
-		}
 	}
 	var prev_safe []int
 	for b.status == 0 {
 		if p.sure == 0 {
 			//always click the middle of board for the first step
 			click_f(5, 5)
-		} else {
-			safe, err := p.findSafe()
-			check(err)
-			fmt.Println("found safe:", safe, prev_safe)
-			if compareSlice(prev_safe, safe) {
-				fmt.Println("safe fronze: %s, exiting", safe)
-				return
-			}
-			prev_safe = make([]int, len(safe))
-			copy(prev_safe, safe)
-			for _, v := range safe {
-				click_f(toXY(v, p.col))
-			}
+			continue
+		}
+		safe := p.findSafe()
+		if len(safe) == 0 {
+			x, y := p.one(isUnknown)
+			fmt.Printf("guess at (%d, %d)\n", x, y)
+			p.guess++
+			p.click(b, x, y)
+			p.dump(fmt.Sprintf("p%d.png", step))
+			step ++
+			continue
+		}
+		fmt.Println("found safe:", safe, prev_safe)
+		if compareSlice(prev_safe, safe) {
+			fmt.Println("safe fronze: %s, exiting", safe)
+			return
+		}
+		prev_safe = make([]int, len(safe))
+		copy(prev_safe, safe)
+		for _, v := range safe {
+			click_f(toXY(v, p.col))
+		}
+		if p.mine == 0 {
+			fmt.Println("Win!")
+			b.status = Win
 		}
 	}
 }
@@ -452,14 +461,14 @@ func isFlag(t *TileExt) bool {
 	return t.value == Flag
 }
 
-func (p *Player) findSafe() ([]int, error) {
+func (p *Player) findSafe() []int {
 	stateChanged := true
 	safe := []int{}
 	for stateChanged {
 		stateChanged = false
 		err := p.refreshView()
 		if (err != nil) {
-			return safe, err
+			check(err)
 		}
 		for s, v := range p.view {
 			if v == s.Len() {
@@ -469,7 +478,7 @@ func (p *Player) findSafe() ([]int, error) {
 						p.tiles[y][x].value = Flag
 						p.mine --
 						if (p.mine == 0) {
-							return p.collect(isUnknown), nil
+							return p.collect(isUnknown)
 						}
 						stateChanged = true
 					}
@@ -484,12 +493,11 @@ func (p *Player) findSafe() ([]int, error) {
 		}
 	}
 	if (len(safe) == 0) {
-		safe = p.findIsle()
+		if p.mine < 5 {
+			safe = p.findIsle()
+		}
 	}
-	if (len(safe) == 0) {
-		return safe, fmt.Errorf("ai has to guess")
-	}
-	return safe, nil
+	return safe
 }
 
 type IsleContext struct {
@@ -607,7 +615,12 @@ func (p *Player) findIsle() []int {
 	isle := p.isle()
 	us := p.collect(isUnknown)
 	if len(us) == len(isle) {
-		fmt.Printf("isle located: %v. Try mines (%d) simulations\n", isle, p.mine)
+		fmt.Printf("isle located: %v.\n", isle)
+		if len(isle) > 10 {
+			fmt.Printf("isle too large. giving up\n")
+			return empty
+		}
+		fmt.Printf("Try mines (%d) simulations\n", p.mine)
 		ic := &IsleContext{player: p, mine: p.mine, isle: isle}
 		safe, err := ic.solve()
 		if err != nil {
@@ -682,6 +695,7 @@ func (p *Player) click(b *Board, x, y int) {
 	if t.isMine() {
 		p.tiles[y][x].value = Boom
 		b.status = Boom
+		fmt.Printf("boom at (%d, %d), game over\n", x, y)
 		return
 	}
 
