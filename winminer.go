@@ -88,8 +88,8 @@ func genBenchCase(level int, rng *rand.Rand) {
 		if i > 0 {
 			fmt.Printf(",")
 		}
-		fmt.Printf("%d", mineTile)
-		remove(mineCandidates, mineTile)
+		fmt.Printf("%d", mineCandidates[mineTile])
+		mineCandidates = remove(mineCandidates, mineTile)
 	}
 	fmt.Print("\n")
 }
@@ -106,6 +106,7 @@ func check(e error) {
 }
 
 func runBench(filename string) {
+	var win, lose, total int
 	text, err := ioutil.ReadFile(filename)
 	check(err)
 	lines := strings.Split(string(text), "\n")
@@ -113,13 +114,20 @@ func runBench(filename string) {
 		mines := strings.Split(lines[i], ",")
 		if len(mines) > 1 {
 			//ignore empty lines
+			total ++
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
 			board.dump(fmt.Sprintf("%d.png", i))
 			player := initPlayer(board)
-			player.play(board)
+			res := player.play(board)
+			if res == Win {
+				win ++
+			} else {
+				lose ++
+			}
 		}
 	}
+	fmt.Printf("win: %f, lose: %f", float64(win)/float64(total), float64(lose)/float64(total))
 }
 
 type TileInt int
@@ -292,6 +300,7 @@ const (
 	Boom    //mine clicked, game over
 	Flag    //mine marked
 	Win
+	Lose
 )
 
 type Player struct {
@@ -324,7 +333,7 @@ func (p *Player) init(b *Board) {
 	}
 }
 
-func (p *Player) play(b *Board) {
+func (p *Player) play(b *Board) int {
 	step := 0
 	click_f := func(x, y int) {
 		if p.tiles[y][x].value == Unknown {
@@ -342,8 +351,15 @@ func (p *Player) play(b *Board) {
 			continue
 		}
 		safe := p.findSafe()
+		if p.mine == 0 {
+			b.status = Win
+			break
+		}
 		if len(safe) == 0 {
 			x, y := p.one(isUnknown)
+			if (x < 0) {
+				panic("unexpected guessing...")
+			}
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
@@ -353,19 +369,20 @@ func (p *Player) play(b *Board) {
 		}
 		fmt.Println("found safe:", safe, prev_safe)
 		if compareSlice(prev_safe, safe) {
-			fmt.Println("safe fronze: %s, exiting", safe)
-			return
+			panic(fmt.Sprintf("safe fronze: %v, exiting", safe))
 		}
 		prev_safe = make([]int, len(safe))
 		copy(prev_safe, safe)
 		for _, v := range safe {
 			click_f(toXY(v, p.col))
 		}
-		if p.mine == 0 {
-			fmt.Println("Win!")
-			b.status = Win
-		}
 	}
+	if b.status == Win {
+		fmt.Println("Win!")
+		return Win
+	}
+	fmt.Println("Lost!")
+	return Lose
 }
 
 func inSlice(i int, s []int) bool {
@@ -464,6 +481,7 @@ func isFlag(t *TileExt) bool {
 func (p *Player) findSafe() []int {
 	stateChanged := true
 	safe := []int{}
+	fmt.Println("mine=", p.mine)
 	for stateChanged {
 		stateChanged = false
 		err := p.refreshView()
@@ -471,9 +489,11 @@ func (p *Player) findSafe() []int {
 			check(err)
 		}
 		for s, v := range p.view {
+			fmt.Println(s, v)
 			if v == s.Len() {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
+					fmt.Println(x, y, p.tiles[y][x].value)
 					if p.tiles[y][x].value != Flag {
 						p.tiles[y][x].value = Flag
 						p.mine --
@@ -492,7 +512,7 @@ func (p *Player) findSafe() []int {
 			}
 		}
 	}
-	if (len(safe) == 0) {
+	if (len(safe) == 0 && p.mine > 0) {
 		if p.mine < 5 {
 			safe = p.findIsle()
 		}
@@ -695,7 +715,7 @@ func (p *Player) click(b *Board, x, y int) {
 	if t.isMine() {
 		p.tiles[y][x].value = Boom
 		b.status = Boom
-		fmt.Printf("boom at (%d, %d), game over\n", x, y)
+		fmt.Printf("boom at (%d, %d)\n", x, y)
 		return
 	}
 
