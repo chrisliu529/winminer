@@ -333,6 +333,9 @@ func (p *Player) play(b *Board) {
 			p.dump(fmt.Sprintf("p%d.png", step))
 			step ++
 		}
+		if p.mine == 0 {
+			b.status = Win
+		}
 	}
 	var prev_safe []int
 	for b.status == 0 {
@@ -441,6 +444,14 @@ func isUnknown(t *TileExt) bool {
 	return t.value == Unknown
 }
 
+func isNumber(t *TileExt) bool {
+	return t.value >= 0 && t.value <= 8
+}
+
+func isFlag(t *TileExt) bool {
+	return t.value == Flag
+}
+
 func (p *Player) findSafe() ([]int, error) {
 	stateChanged := true
 	safe := []int{}
@@ -485,10 +496,109 @@ type IsleContext struct {
 	player *Player
 	mine   int
 	isle   []int
+	safe   []int
+	mines  []int
+}
+
+func combinations(n, m int, f func([]int)) {
+	s := make([]int, m)
+	last := m - 1
+	var rc func(int, int)
+	rc = func(i, next int) {
+		for j := next; j < n; j++ {
+			s[i] = j
+			if i == last {
+				f(s)
+			} else {
+				rc(i + 1, j + 1)
+			}
+		}
+		return
+	}
+	rc(0, 0)
 }
 
 func (ic *IsleContext) solve() ([]int, error) {
-	return nil, fmt.Errorf("Not Implemented")
+	solutions := 0
+	combinations(len(ic.isle), ic.mine,
+		func(s []int) {
+			for _, e := range s {
+				x, y := toXY(ic.isle[e], ic.player.col)
+				ic.player.tiles[y][x].value = Flag
+			}
+			if ic.player.isConsistent() {
+				solutions ++
+				ic.safe = ic.player.collect(isUnknown)
+				ic.mines = make([]int, ic.mine)
+				for i, e := range s {
+					ic.mines[i] = ic.isle[e]
+				}
+			}
+			for _, e := range s {
+				x, y := toXY(ic.isle[e], ic.player.col)
+				ic.player.tiles[y][x].value = Unknown
+			}
+		})
+
+	if solutions == 1 {
+		ic.player.mine = 0
+		for _, e := range ic.mines {
+			x, y := toXY(e, ic.player.col)
+			ic.player.tiles[y][x].value = Flag
+		}
+		return ic.safe, nil
+	} else if solutions == 0 {
+		return nil, fmt.Errorf("found no solution")
+	}
+	return nil, fmt.Errorf("found multiple solutions")
+}
+
+func (p *Player) isConsistent() bool {
+	numbers := p.collect(isNumber)
+	for _, n := range numbers {
+		x, y := toXY(n, p.col)
+		nf := p.neightbors(x, y, isFlag)
+		if p.tiles[y][x].value != nf {
+			fmt.Printf("inconsistency detected (%d, %d) = %d (!=%d)\n", x, y, p.tiles[y][x].value, nf)
+			return false
+		}
+	}
+	return true
+}
+
+func (p *Player) neightbors(x, y int, filter func(*TileExt) bool) int {
+	r, c := p.row, p.col
+	n := 0
+	var f = func(xt, yt int) {
+		if filter(&p.tiles[yt][xt]) {
+			n ++
+		}
+	}
+	if x + 1 < c {
+		f(x + 1, y)
+	}
+	if x - 1 >= 0 {
+		f(x - 1, y)
+	}
+	if y + 1 < r {
+		f(x, y + 1)
+		if x + 1 < c {
+			f(x + 1, y + 1)
+		}
+		if x - 1 >= 0 {
+			f(x - 1, y + 1)
+		}
+	}
+	if y - 1 >= 0 {
+		f(x, y - 1)
+		if x + 1 < c {
+			f(x + 1, y - 1)
+		}
+		if x - 1 >= 0 {
+			f(x - 1, y - 1)
+		}
+	}
+	return n
 }
 
 func (p *Player) findIsle() []int {
