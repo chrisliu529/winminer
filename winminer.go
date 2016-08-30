@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/chrisliu529/gopl.io/ch6/intset"
 	"image"
 	"image/png"
 	"io/ioutil"
@@ -13,7 +14,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"github.com/chrisliu529/gopl.io/ch6/intset"
 )
 
 type LevelConfig struct {
@@ -74,7 +74,7 @@ func genBench(n, s, level int) {
 }
 
 func genBenchCase(level int, rng *rand.Rand) {
-	lc := levelConfigs[level - 1]
+	lc := levelConfigs[level-1]
 	row := lc.row
 	col := lc.column
 	tiles := row * col
@@ -86,7 +86,7 @@ func genBenchCase(level int, rng *rand.Rand) {
 	for i := 0; i < mine; i++ {
 		mineTile := rng.Intn(len(mineCandidates))
 		if i > 0 {
-			fmt.Printf(",")
+			fmt.Print(",")
 		}
 		fmt.Printf("%d", mineCandidates[mineTile])
 		mineCandidates = remove(mineCandidates, mineTile)
@@ -95,8 +95,8 @@ func genBenchCase(level int, rng *rand.Rand) {
 }
 
 func remove(slice []int, i int) []int {
-	copy(slice[i:], slice[i + 1:])
-	return slice[:len(slice) - 1]
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
 }
 
 func check(e error) {
@@ -114,21 +114,21 @@ func runBench(filename string) {
 		mines := strings.Split(lines[i], ",")
 		if len(mines) > 1 {
 			//ignore empty lines
-			total ++
+			total++
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
 			board.dump(fmt.Sprintf("%d.png", i))
 			player := initPlayer(board, i)
 			res := player.play(board)
 			if res == Win {
-				win ++
+				win++
 			} else {
 				player.dump(fmt.Sprintf("f%s.png", player.gamename))
-				lose ++
+				lose++
 			}
 		}
 	}
-	fmt.Printf("win: %f, lose: %f", float64(win) / float64(total), float64(lose) / float64(total))
+	fmt.Printf("win: %f, lose: %f", float64(win)/float64(total), float64(lose)/float64(total))
 }
 
 type TileInt int
@@ -187,28 +187,28 @@ func (b *Board) setHints() {
 func (b *Board) getNeighbors(x, y int) []*TileInt {
 	r, c := b.row, b.col
 	tiles := []*TileInt{}
-	if x + 1 < c {
-		tiles = append(tiles, &b.tiles[y][x + 1])
+	if x+1 < c {
+		tiles = append(tiles, &b.tiles[y][x+1])
 	}
-	if x - 1 >= 0 {
-		tiles = append(tiles, &b.tiles[y][x - 1])
+	if x-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y][x-1])
 	}
-	if y + 1 < r {
-		tiles = append(tiles, &b.tiles[y + 1][x])
-		if x + 1 < c {
-			tiles = append(tiles, &b.tiles[y + 1][x + 1])
+	if y+1 < r {
+		tiles = append(tiles, &b.tiles[y+1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y+1][x+1])
 		}
-		if x - 1 >= 0 {
-			tiles = append(tiles, &b.tiles[y + 1][x - 1])
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y+1][x-1])
 		}
 	}
-	if y - 1 >= 0 {
-		tiles = append(tiles, &b.tiles[y - 1][x])
-		if x + 1 < c {
-			tiles = append(tiles, &b.tiles[y - 1][x + 1])
+	if y-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y-1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y-1][x+1])
 		}
-		if x - 1 >= 0 {
-			tiles = append(tiles, &b.tiles[y - 1][x - 1])
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y-1][x-1])
 		}
 	}
 	return tiles
@@ -224,11 +224,11 @@ func toXY(index, column int) (int, int) {
 }
 
 func toIndex(x, y, column int) int {
-	return y * column + x
+	return y*column + x
 }
 
 func (b *Board) initTiles() {
-	c := levelConfigs[b.level - 1]
+	c := levelConfigs[b.level-1]
 	b.row, b.col, b.mine = c.row, c.column, c.mine
 	b.tiles = make([][]TileInt, b.row)
 	for i := range b.tiles {
@@ -252,7 +252,7 @@ func (b *Board) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16 * b.col, 16 * b.row
+	width, height := 16*b.col, 16*b.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range b.tiles {
 		for x, v := range b.tiles[y] {
@@ -260,7 +260,7 @@ func (b *Board) dump(outpath string) {
 			if v >= 0 {
 				imgFile = fmt.Sprintf("%d.png", v)
 			}
-			render(img, 16 * x, 16 * y, imgFile)
+			render(img, 16*x, 16*y, imgFile)
 		}
 	}
 	png.Encode(file, img)
@@ -273,7 +273,7 @@ func render(img *image.RGBA, x int, y int, filename string) {
 	}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
-			img.Set(x + i, y + j, srcImg.At(i, j))
+			img.Set(x+i, y+j, srcImg.At(i, j))
 		}
 	}
 }
@@ -285,7 +285,7 @@ func (t *TileInt) isMine() bool {
 func getLevel(n int) (level int, err error) {
 	for i := 0; i < len(levelConfigs); i++ {
 		if n == levelConfigs[i].mine {
-			return i + 1, nil
+			return i + 1, err
 		}
 	}
 	return level, errors.New("Level not found")
@@ -341,7 +341,7 @@ func (p *Player) play(b *Board) int {
 		if p.tiles[y][x].value == Unknown {
 			p.sure++
 			p.click(b, x, y)
-			step ++
+			step++
 		}
 	}
 	var prev_safe []int
@@ -358,13 +358,13 @@ func (p *Player) play(b *Board) int {
 		}
 		if len(safe) == 0 {
 			x, y := p.one(isUnknown)
-			if (x < 0) {
+			if x < 0 {
 				panic("unexpected guessing...")
 			}
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
-			step ++
+			step++
 			continue
 		}
 		fmt.Println("found safe:", safe, prev_safe)
@@ -414,10 +414,10 @@ func (p *Player) refreshView() error {
 				v := t.value
 				if v > 0 && v <= 8 {
 					s, v1 := p.circle(x, y, v)
-					if (v1 < 0) {
+					if v1 < 0 {
 						return fmt.Errorf("bad value: (%d, %d) = %d", x, y, v1)
 					}
-					if (s.Len() > 0) {
+					if s.Len() > 0 {
 						p.view[s] = v1
 					}
 				}
@@ -433,34 +433,34 @@ func (p *Player) circle(x, y, v int) (*intset.IntSet, int) {
 
 	var f = func(xt, yt int) {
 		vt := p.tiles[yt][xt].value
-		if (vt == Unknown) {
+		if vt == Unknown {
 			s.Add(toIndex(xt, yt, c))
-		} else if (vt == Flag) {
-			v --
+		} else if vt == Flag {
+			v--
 		}
 	}
-	if x + 1 < c {
-		f(x + 1, y)
+	if x+1 < c {
+		f(x+1, y)
 	}
-	if x - 1 >= 0 {
-		f(x - 1, y)
+	if x-1 >= 0 {
+		f(x-1, y)
 	}
-	if y + 1 < r {
-		f(x, y + 1)
-		if x + 1 < c {
-			f(x + 1, y + 1)
+	if y+1 < r {
+		f(x, y+1)
+		if x+1 < c {
+			f(x+1, y+1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y + 1)
+		if x-1 >= 0 {
+			f(x-1, y+1)
 		}
 	}
-	if y - 1 >= 0 {
-		f(x, y - 1)
-		if x + 1 < c {
-			f(x + 1, y - 1)
+	if y-1 >= 0 {
+		f(x, y-1)
+		if x+1 < c {
+			f(x+1, y-1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y - 1)
+		if x-1 >= 0 {
+			f(x-1, y-1)
 		}
 	}
 	return &s, v
@@ -479,19 +479,23 @@ func isFlag(t *TileExt) bool {
 }
 
 func (p *Player) findSafe() []int {
-	stateChanged := true
+	var stateChanged, needRefresh bool
+	needRefresh = true
+	stateChanged = true
 	safe := []int{}
 	fmt.Println("mine=", p.mine)
-	for stateChanged {
+	for stateChanged || needRefresh {
 		n := 0
 		stateChanged = false
-		err := p.refreshView()
-		if (err != nil) {
-			check(err)
+		if needRefresh {
+			err := p.refreshView()
+			if err != nil {
+				check(err)
+			}
 		}
-		diff := make(map[*intset.IntSet]int)
+		needRefresh = false
 		for s, v := range p.view {
-			n ++
+			n++
 			fmt.Println(n, s, v)
 			if v == s.Len() {
 				for _, e := range s.Elems() {
@@ -499,16 +503,16 @@ func (p *Player) findSafe() []int {
 					fmt.Println(x, y, p.tiles[y][x].value)
 					if p.tiles[y][x].value != Flag {
 						p.tiles[y][x].value = Flag
-						p.mine --
-						if (p.mine == 0) {
+						p.mine--
+						if p.mine == 0 {
 							return p.collect(isUnknown)
 						}
-						stateChanged = true
+						needRefresh = true
 					}
 				}
-			} else if (v == 0) {
+			} else if v == 0 {
 				for _, e := range s.Elems() {
-					if ! inSlice(e, safe) {
+					if !inSlice(e, safe) {
 						safe = append(safe, e)
 					}
 				}
@@ -516,37 +520,42 @@ func (p *Player) findSafe() []int {
 			if len(safe) > 0 {
 				return safe
 			}
-			if (v > 0) {
-				//finding diff
-				for s2, v2 := range p.view {
-					if ! s.ProperContains(s2) {
-						continue
-					}
-					fmt.Printf("%s contains %s\n", s, s2)
-					d := s.Copy()
-					d.DifferenceWith(s2)
-					fmt.Printf("%s - %s = %s\n", s, s2, d)
-					d2 := p.viewKey(d)
-					newv := v - v2
-					if val, exists := p.view[d2]; exists {
-						if val != newv {
-							fmt.Printf("state change #1, view[%s]=%d\n", d2, newv)
+		}
+		if !needRefresh {
+			fmt.Println("searching view directly found no safe tiles, start searching diff")
+			diff := make(map[*intset.IntSet]int)
+			for s, v := range p.view {
+				if v > 0 {
+					for s2, v2 := range p.view {
+						if !s.ProperContains(s2) {
+							continue
+						}
+						fmt.Printf("%s contains %s\n", s, s2)
+						d := s.Copy()
+						d.DifferenceWith(s2)
+						fmt.Printf("%s - %s = %s\n", s, s2, d)
+						d2 := p.viewKey(d)
+						newv := v - v2
+						if val, exists := p.view[d2]; exists {
+							if val != newv {
+								fmt.Printf("state change #1, view[%s]=%d\n", d2, newv)
+								diff[d2] = newv
+							}
+						} else {
+							fmt.Printf("state change #2, view[%s]=%d\n", d2, newv)
 							diff[d2] = newv
 						}
-					} else {
-						fmt.Printf("state change #2, view[%s]=%d\n", d2, newv)
-						diff[d2] = newv
 					}
 				}
 			}
-		}
-		for k, v := range diff {
-			stateChanged = true
-			p.view[k] = v
+			for k, v := range diff {
+				stateChanged = true
+				p.view[k] = v
+			}
 		}
 	}
 
-	if (len(safe) == 0 && p.mine > 0) {
+	if len(safe) == 0 && p.mine > 0 {
 		if p.mine < 5 {
 			safe = p.findIsle()
 		}
@@ -554,8 +563,8 @@ func (p *Player) findSafe() []int {
 	return safe
 }
 
-func (p *Player) viewKey(s*intset.IntSet) *intset.IntSet {
-	for s2, _ := range p.view {
+func (p *Player) viewKey(s *intset.IntSet) *intset.IntSet {
+	for s2 := range p.view {
 		fmt.Println(s2)
 		if s.String() == s2.String() {
 			fmt.Println("view key found", s2)
@@ -583,7 +592,7 @@ func combinations(n, m int, f func([]int)) {
 			if i == last {
 				f(s)
 			} else {
-				rc(i + 1, j + 1)
+				rc(i+1, j+1)
 			}
 		}
 		return
@@ -600,7 +609,7 @@ func (ic *IsleContext) solve() ([]int, error) {
 				ic.player.tiles[y][x].value = Flag
 			}
 			if ic.player.isConsistent() {
-				solutions ++
+				solutions++
 				ic.safe = ic.player.collect(isUnknown)
 				ic.mines = make([]int, ic.mine)
 				for i, e := range s {
@@ -621,9 +630,9 @@ func (ic *IsleContext) solve() ([]int, error) {
 		}
 		return ic.safe, nil
 	} else if solutions == 0 {
-		return nil, fmt.Errorf("found no solution")
+		return nil, errors.New("found no solution")
 	}
-	return nil, fmt.Errorf("found multiple solutions")
+	return nil, errors.New("found multiple solutions")
 }
 
 func (p *Player) isConsistent() bool {
@@ -644,31 +653,31 @@ func (p *Player) neightbors(x, y int, filter func(*TileExt) bool) int {
 	n := 0
 	var f = func(xt, yt int) {
 		if filter(&p.tiles[yt][xt]) {
-			n ++
+			n++
 		}
 	}
-	if x + 1 < c {
-		f(x + 1, y)
+	if x+1 < c {
+		f(x+1, y)
 	}
-	if x - 1 >= 0 {
-		f(x - 1, y)
+	if x-1 >= 0 {
+		f(x-1, y)
 	}
-	if y + 1 < r {
-		f(x, y + 1)
-		if x + 1 < c {
-			f(x + 1, y + 1)
+	if y+1 < r {
+		f(x, y+1)
+		if x+1 < c {
+			f(x+1, y+1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y + 1)
+		if x-1 >= 0 {
+			f(x-1, y+1)
 		}
 	}
-	if y - 1 >= 0 {
-		f(x, y - 1)
-		if x + 1 < c {
-			f(x + 1, y - 1)
+	if y-1 >= 0 {
+		f(x, y-1)
+		if x+1 < c {
+			f(x+1, y-1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y - 1)
+		if x-1 >= 0 {
+			f(x-1, y-1)
 		}
 	}
 	return n
@@ -682,7 +691,7 @@ func (p *Player) findIsle() []int {
 	if len(us) == len(isle) {
 		fmt.Printf("isle located: %v.\n", isle)
 		if len(isle) > 10 {
-			fmt.Printf("isle too large. giving up\n")
+			fmt.Println("isle too large. giving up")
 			return empty
 		}
 		fmt.Printf("Try mines (%d) simulations\n", p.mine)
@@ -716,10 +725,10 @@ func (p *Player) isle0(x, y int, result *[]int, visited map[int]bool) {
 	visited[i] = true
 	if p.tiles[y][x].value == Unknown {
 		*result = append(*result, i)
-		p.isle0(x - 1, y, result, visited)
-		p.isle0(x + 1, y, result, visited)
-		p.isle0(x, y - 1, result, visited)
-		p.isle0(x, y + 1, result, visited)
+		p.isle0(x-1, y, result, visited)
+		p.isle0(x+1, y, result, visited)
+		p.isle0(x, y-1, result, visited)
+		p.isle0(x, y+1, result, visited)
 	}
 }
 
@@ -765,10 +774,10 @@ func (p *Player) click(b *Board, x, y int) {
 	}
 
 	if t == 0 {
-		p.click(b, x - 1, y)
-		p.click(b, x + 1, y)
-		p.click(b, x, y - 1)
-		p.click(b, x, y + 1)
+		p.click(b, x-1, y)
+		p.click(b, x+1, y)
+		p.click(b, x, y-1)
+		p.click(b, x, y+1)
 	}
 }
 
@@ -776,7 +785,7 @@ func (p *Player) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16 * p.col, 16 * p.row
+	width, height := 16*p.col, 16*p.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range p.tiles {
 		for x, t := range p.tiles[y] {
@@ -789,7 +798,7 @@ func (p *Player) dump(outpath string) {
 			} else if v == Flag {
 				imgFile = "flag.png"
 			}
-			render(img, 16 * x, 16 * y, imgFile)
+			render(img, 16*x, 16*y, imgFile)
 		}
 	}
 	png.Encode(file, img)
