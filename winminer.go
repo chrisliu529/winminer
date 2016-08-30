@@ -317,7 +317,7 @@ type Player struct {
 
 func initPlayer(b *Board, i int) *Player {
 	fmt.Println("init player with level ", b.level)
-	p := &Player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level , i)}
+	p := &Player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level, i)}
 	p.init(b)
 	return p
 }
@@ -483,13 +483,16 @@ func (p *Player) findSafe() []int {
 	safe := []int{}
 	fmt.Println("mine=", p.mine)
 	for stateChanged {
+		n := 0
 		stateChanged = false
 		err := p.refreshView()
 		if (err != nil) {
 			check(err)
 		}
+		diff := make(map[*intset.IntSet]int)
 		for s, v := range p.view {
-			fmt.Println(s, v)
+			n ++
+			fmt.Println(n, s, v)
 			if v == s.Len() {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
@@ -510,14 +513,56 @@ func (p *Player) findSafe() []int {
 					}
 				}
 			}
+			if len(safe) > 0 {
+				return safe
+			}
+			if (v > 0) {
+				//finding diff
+				for s2, v2 := range p.view {
+					if ! s.ProperContains(s2) {
+						continue
+					}
+					fmt.Printf("%s contains %s\n", s, s2)
+					d := s.Copy()
+					d.DifferenceWith(s2)
+					fmt.Printf("%s - %s = %s\n", s, s2, d)
+					d2 := p.viewKey(d)
+					newv := v - v2
+					if val, exists := p.view[d2]; exists {
+						if val != newv {
+							fmt.Printf("state change #1, view[%s]=%d\n", d2, newv)
+							diff[d2] = newv
+						}
+					} else {
+						fmt.Printf("state change #2, view[%s]=%d\n", d2, newv)
+						diff[d2] = newv
+					}
+				}
+			}
+		}
+		for k, v := range diff {
+			stateChanged = true
+			p.view[k] = v
 		}
 	}
+
 	if (len(safe) == 0 && p.mine > 0) {
 		if p.mine < 5 {
 			safe = p.findIsle()
 		}
 	}
 	return safe
+}
+
+func (p *Player) viewKey(s*intset.IntSet) *intset.IntSet {
+	for s2, _ := range p.view {
+		fmt.Println(s2)
+		if s.String() == s2.String() {
+			fmt.Println("view key found", s2)
+			return s2
+		}
+	}
+	return s
 }
 
 type IsleContext struct {
