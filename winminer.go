@@ -118,16 +118,17 @@ func runBench(filename string) {
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
 			board.dump(fmt.Sprintf("%d.png", i))
-			player := initPlayer(board)
+			player := initPlayer(board, i)
 			res := player.play(board)
 			if res == Win {
 				win ++
 			} else {
+				player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				lose ++
 			}
 		}
 	}
-	fmt.Printf("win: %f, lose: %f", float64(win)/float64(total), float64(lose)/float64(total))
+	fmt.Printf("win: %f, lose: %f", float64(win) / float64(total), float64(lose) / float64(total))
 }
 
 type TileInt int
@@ -304,18 +305,19 @@ const (
 )
 
 type Player struct {
-	tiles [][]TileExt
-	view  map[*intset.IntSet]int
-	sure  int
-	guess int
-	row   int
-	col   int
-	mine  int
+	tiles    [][]TileExt
+	view     map[*intset.IntSet]int
+	sure     int
+	guess    int
+	row      int
+	col      int
+	mine     int
+	gamename string
 }
 
-func initPlayer(b *Board) *Player {
+func initPlayer(b *Board, i int) *Player {
 	fmt.Println("init player with level ", b.level)
-	p := &Player{sure: 0, guess: 0}
+	p := &Player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level , i)}
 	p.init(b)
 	return p
 }
@@ -339,7 +341,6 @@ func (p *Player) play(b *Board) int {
 		if p.tiles[y][x].value == Unknown {
 			p.sure++
 			p.click(b, x, y)
-			p.dump(fmt.Sprintf("p%d.png", step))
 			step ++
 		}
 	}
@@ -363,7 +364,6 @@ func (p *Player) play(b *Board) int {
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
-			p.dump(fmt.Sprintf("p%d.png", step))
 			step ++
 			continue
 		}
