@@ -1,28 +1,25 @@
 #!/usr/bin/python
 
 import subprocess
-from multiprocessing import Pool
+import sys
 
-def wins(summary):
-    lines = summary.split('\n')
-    for line in lines:
-        if line.startswith('won:'):
-            return int(line.split()[1])
+def get_output(cmd):
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    out, err = p.communicate()
+    if p.returncode != 0:
+        print out
+        print err
+        sys.exit(p.returncode)
+    return out.rstrip() #remove '\n' in the end
 
-def level_score(level):
-    global win_times
-    weights = [1,2,4]
-    w = wins(subprocess.check_output(["./mine-" + str(level)]))
-    return (w, weights[level-1]*w)
+def win_ratio(s):
+    return float(s.split(',')[0].split( )[1][:-1])
 
 def bench():
-    p = Pool(4)
-    l = p.map(level_score, range(1, 4))
-    total = 0
-    win_times = []
-    for (w, s) in l:
-        total += s
-        win_times.append(str(w))
-    print str(total), '(' + ','.join(win_times) + ')'
+    r = win_ratio(get_output("./winminer | grep win:"))
+    print 'win_ratio=%s' % r
+    if r > float(sys.argv[1]):
+        sys.exit(0)
+    sys.exit(1)
 
 bench()
