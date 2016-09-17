@@ -13,7 +13,7 @@ def get_output(cmd):
     return out.rstrip() #remove '\n' in the end
 
 def win_ratio(s):
-    return float(s.split(',')[0].split( )[1][:-1])
+    return float(s.split(',')[0].split()[1])
 
 def bench():
     r = win_ratio(get_output("./winminer | grep win:"))

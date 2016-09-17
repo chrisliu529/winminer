@@ -114,6 +114,7 @@ func check(e error) {
 
 func runBench(filename string) {
 	var win, lose, total int
+	var sure, guess, total_clicks int
 	text, err := ioutil.ReadFile(filename)
 	check(err)
 	lines := strings.Split(string(text), "\n")
@@ -133,9 +134,13 @@ func runBench(filename string) {
 				player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				lose++
 			}
+			sure += player.sure
+			guess += player.guess
+			total_clicks += (player.sure + player.guess)
 		}
 	}
-	fmt.Printf("win: %f, lose: %f", float64(win) / float64(total), float64(lose) / float64(total))
+	fmt.Printf("win: %.2f, lose: %.2f\n", float64(win) / float64(total), float64(lose) / float64(total))
+	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n", sure, float64(sure) / float64(total_clicks), guess, float64(guess) / float64(total_clicks))
 }
 
 type TileInt int
