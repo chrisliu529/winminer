@@ -139,8 +139,14 @@ func runBench(filename string) {
 			total_clicks += (player.sure + player.guess)
 		}
 	}
-	fmt.Printf("win: %.2f, lose: %.2f\n", float64(win) / float64(total), float64(lose) / float64(total))
-	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n", sure, float64(sure) / float64(total_clicks), guess, float64(guess) / float64(total_clicks))
+	fmt.Printf("win: %.2f, lose: %.2f\n",
+			float64(win) / float64(total),
+			float64(lose) / float64(total))
+	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n",
+			sure,
+			float64(sure) / float64(total_clicks),
+			guess,
+			float64(guess) / float64(total_clicks))
 }
 
 type TileInt int
@@ -374,7 +380,7 @@ func (p *Player) play(b *Board) int {
 		}
 		if len(safe) == 0 {
 			fmt.Println("now we have to guess... start searching tiles with least mine probability")
-			x, y := p.one(isUnknown)
+			x, y := p.doGuess()
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
@@ -400,6 +406,10 @@ func inSlice(i int, s []int) bool {
 		}
 	}
 	return false
+}
+
+func (p *Player) doGuess() (int, int) {
+	return p.one(isUnknown)
 }
 
 func (p *Player) refreshView() error {
