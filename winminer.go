@@ -356,7 +356,6 @@ func (p *Player) play(b *Board) int {
 			step++
 		}
 	}
-	var prev_safe []int
 	for b.status == 0 {
 		if p.sure == 0 {
 			//always click the middle of board for the first step
@@ -369,22 +368,14 @@ func (p *Player) play(b *Board) int {
 			break
 		}
 		if len(safe) == 0 {
+			fmt.Println("now we have to guess... start searching tiles with least mine probability")
 			x, y := p.one(isUnknown)
-			if x < 0 {
-				panic("unexpected guessing...")
-			}
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
 			step++
 			continue
 		}
-		fmt.Println("found safe:", safe, prev_safe)
-		if compareSlice(prev_safe, safe) {
-			panic(fmt.Sprintf("safe fronze: %v, exiting", safe))
-		}
-		prev_safe = make([]int, len(safe))
-		copy(prev_safe, safe)
 		for _, v := range safe {
 			click_f(toXY(v, p.col))
 		}
@@ -404,18 +395,6 @@ func inSlice(i int, s []int) bool {
 		}
 	}
 	return false
-}
-
-func compareSlice(s1, s2 []int) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-	for i, v := range s1 {
-		if v != s2[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func (p *Player) refreshView() error {
@@ -544,13 +523,13 @@ func (p *Player) findSafe() []int {
 						d := s.Copy()
 						d.DifferenceWith(s2)
 						d2 := p.viewKey(d)
-						newv := v - v2
+						nv := v - v2
 						if val, exists := p.view[d2]; exists {
-							if val != newv {
-								diff[d2] = newv
+							if val != nv {
+								diff[d2] = nv
 							}
 						} else {
-							diff[d2] = newv
+							diff[d2] = nv
 						}
 					}
 				}
@@ -677,7 +656,7 @@ func (p *Player) isConsistent() bool {
 	numbers := p.collect(isNumber)
 	for _, n := range numbers {
 		x, y := toXY(n, p.col)
-		nf := p.neightbors(x, y, isFlag)
+		nf := p.neighbors(x, y, isFlag)
 		if p.tiles[y][x].value != nf {
 			fmt.Printf("inconsistency detected (%d, %d) = %d (!=%d)\n", x, y, p.tiles[y][x].value, nf)
 			return false
@@ -686,7 +665,7 @@ func (p *Player) isConsistent() bool {
 	return true
 }
 
-func (p *Player) neightbors(x, y int, filter func(*TileExt) bool) int {
+func (p *Player) neighbors(x, y int, filter func(*TileExt) bool) int {
 	r, c := p.row, p.col
 	n := 0
 	var f = func(xt, yt int) {
