@@ -18,6 +18,8 @@ def win_ratio(s):
 def bench():
     r = win_ratio(get_output("./winminer | grep win:"))
     print 'win_ratio=%s' % r
+    if len(sys.argv) == 1:
+        return
     if r > float(sys.argv[1]):
         sys.exit(0)
     sys.exit(1)

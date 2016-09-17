@@ -74,7 +74,7 @@ func genBench(n, s, level int) {
 }
 
 func genBenchCase(level int, rng *rand.Rand) {
-	lc := levelConfigs[level-1]
+	lc := levelConfigs[level - 1]
 	row := lc.row
 	col := lc.column
 	tiles := row * col
@@ -87,7 +87,7 @@ func genBenchCase(level int, rng *rand.Rand) {
 		mineTile := rng.Intn(len(mineCandidates))
 		if mineCandidates[mineTile] == toIndex(INIT_X, INIT_Y, col) {
 			/* According to winmine game implementation, the board will be re-shuffled when first click on a mine.
-			 * We simply fix the first click and avoid putting a mine on it.
+			 * We simply fix the first click by avoiding putting a mine on it.
 			 */
 			continue
 		}
@@ -102,8 +102,8 @@ func genBenchCase(level int, rng *rand.Rand) {
 }
 
 func remove(slice []int, i int) []int {
-	copy(slice[i:], slice[i+1:])
-	return slice[:len(slice)-1]
+	copy(slice[i:], slice[i + 1:])
+	return slice[:len(slice) - 1]
 }
 
 func check(e error) {
@@ -135,7 +135,7 @@ func runBench(filename string) {
 			}
 		}
 	}
-	fmt.Printf("win: %f, lose: %f", float64(win)/float64(total), float64(lose)/float64(total))
+	fmt.Printf("win: %f, lose: %f", float64(win) / float64(total), float64(lose) / float64(total))
 }
 
 type TileInt int
@@ -199,28 +199,28 @@ func (b *Board) setHints() {
 func (b *Board) getNeighbors(x, y int) []*TileInt {
 	r, c := b.row, b.col
 	tiles := []*TileInt{}
-	if x+1 < c {
-		tiles = append(tiles, &b.tiles[y][x+1])
+	if x + 1 < c {
+		tiles = append(tiles, &b.tiles[y][x + 1])
 	}
-	if x-1 >= 0 {
-		tiles = append(tiles, &b.tiles[y][x-1])
+	if x - 1 >= 0 {
+		tiles = append(tiles, &b.tiles[y][x - 1])
 	}
-	if y+1 < r {
-		tiles = append(tiles, &b.tiles[y+1][x])
-		if x+1 < c {
-			tiles = append(tiles, &b.tiles[y+1][x+1])
+	if y + 1 < r {
+		tiles = append(tiles, &b.tiles[y + 1][x])
+		if x + 1 < c {
+			tiles = append(tiles, &b.tiles[y + 1][x + 1])
 		}
-		if x-1 >= 0 {
-			tiles = append(tiles, &b.tiles[y+1][x-1])
+		if x - 1 >= 0 {
+			tiles = append(tiles, &b.tiles[y + 1][x - 1])
 		}
 	}
-	if y-1 >= 0 {
-		tiles = append(tiles, &b.tiles[y-1][x])
-		if x+1 < c {
-			tiles = append(tiles, &b.tiles[y-1][x+1])
+	if y - 1 >= 0 {
+		tiles = append(tiles, &b.tiles[y - 1][x])
+		if x + 1 < c {
+			tiles = append(tiles, &b.tiles[y - 1][x + 1])
 		}
-		if x-1 >= 0 {
-			tiles = append(tiles, &b.tiles[y-1][x-1])
+		if x - 1 >= 0 {
+			tiles = append(tiles, &b.tiles[y - 1][x - 1])
 		}
 	}
 	return tiles
@@ -236,11 +236,11 @@ func toXY(index, column int) (int, int) {
 }
 
 func toIndex(x, y, column int) int {
-	return y*column + x
+	return y * column + x
 }
 
 func (b *Board) initTiles() {
-	c := levelConfigs[b.level-1]
+	c := levelConfigs[b.level - 1]
 	b.row, b.col, b.mine = c.row, c.column, c.mine
 	b.tiles = make([][]TileInt, b.row)
 	for i := range b.tiles {
@@ -264,7 +264,7 @@ func (b *Board) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16*b.col, 16*b.row
+	width, height := 16 * b.col, 16 * b.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range b.tiles {
 		for x, v := range b.tiles[y] {
@@ -272,7 +272,7 @@ func (b *Board) dump(outpath string) {
 			if v >= 0 {
 				imgFile = fmt.Sprintf("%d.png", v)
 			}
-			render(img, 16*x, 16*y, imgFile)
+			render(img, 16 * x, 16 * y, imgFile)
 		}
 	}
 	png.Encode(file, img)
@@ -285,7 +285,7 @@ func render(img *image.RGBA, x int, y int, filename string) {
 	}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
-			img.Set(x+i, y+j, srcImg.At(i, j))
+			img.Set(x + i, y + j, srcImg.At(i, j))
 		}
 	}
 }
@@ -451,28 +451,28 @@ func (p *Player) circle(x, y, v int) (*intset.IntSet, int) {
 			v--
 		}
 	}
-	if x+1 < c {
-		f(x+1, y)
+	if x + 1 < c {
+		f(x + 1, y)
 	}
-	if x-1 >= 0 {
-		f(x-1, y)
+	if x - 1 >= 0 {
+		f(x - 1, y)
 	}
-	if y+1 < r {
-		f(x, y+1)
-		if x+1 < c {
-			f(x+1, y+1)
+	if y + 1 < r {
+		f(x, y + 1)
+		if x + 1 < c {
+			f(x + 1, y + 1)
 		}
-		if x-1 >= 0 {
-			f(x-1, y+1)
+		if x - 1 >= 0 {
+			f(x - 1, y + 1)
 		}
 	}
-	if y-1 >= 0 {
-		f(x, y-1)
-		if x+1 < c {
-			f(x+1, y-1)
+	if y - 1 >= 0 {
+		f(x, y - 1)
+		if x + 1 < c {
+			f(x + 1, y - 1)
 		}
-		if x-1 >= 0 {
-			f(x-1, y-1)
+		if x - 1 >= 0 {
+			f(x - 1, y - 1)
 		}
 	}
 	return &s, v
@@ -495,7 +495,6 @@ func (p *Player) findSafe() []int {
 	needRefresh = true
 	stateChanged = true
 	safe := []int{}
-	fmt.Println("mine=", p.mine)
 	for stateChanged || needRefresh {
 		n := 0
 		stateChanged = false
@@ -542,19 +541,15 @@ func (p *Player) findSafe() []int {
 						if !s.ProperContains(s2) {
 							continue
 						}
-						fmt.Printf("%s contains %s\n", s, s2)
 						d := s.Copy()
 						d.DifferenceWith(s2)
-						fmt.Printf("%s - %s = %s\n", s, s2, d)
 						d2 := p.viewKey(d)
 						newv := v - v2
 						if val, exists := p.view[d2]; exists {
 							if val != newv {
-								fmt.Printf("state change #1, view[%s]=%d\n", d2, newv)
 								diff[d2] = newv
 							}
 						} else {
-							fmt.Printf("state change #2, view[%s]=%d\n", d2, newv)
 							diff[d2] = newv
 						}
 					}
@@ -565,6 +560,29 @@ func (p *Player) findSafe() []int {
 				p.view[k] = v
 			}
 		}
+		if !stateChanged {
+			fmt.Println("searching view diff made no state change, start searching reduce")
+			reduce := make(map[*intset.IntSet]int)
+			for s, v := range p.view {
+				if v > 1 {
+					for _, e := range s.Elems() {
+						s2 := s.Copy()
+						s2.Remove(e)
+						reduce[s2] = v - 1
+					}
+				}
+			}
+			for s1, v1 := range reduce {
+				for s0, v0 := range p.view {
+					if s0.ProperContains(s1) && v0 == v1 {
+						s2 := s0.Copy()
+						s2.DifferenceWith(s1)
+						return s2.Elems()
+					}
+				}
+			}
+		}
+
 	}
 
 	if len(safe) == 0 && p.mine > 0 {
@@ -577,7 +595,6 @@ func (p *Player) findSafe() []int {
 
 func (p *Player) viewKey(s *intset.IntSet) *intset.IntSet {
 	for s2 := range p.view {
-		fmt.Println(s2)
 		if s.String() == s2.String() {
 			fmt.Println("view key found", s2)
 			return s2
@@ -604,7 +621,7 @@ func combinations(n, m int, f func([]int)) {
 			if i == last {
 				f(s)
 			} else {
-				rc(i+1, j+1)
+				rc(i + 1, j + 1)
 			}
 		}
 		return
@@ -668,28 +685,28 @@ func (p *Player) neightbors(x, y int, filter func(*TileExt) bool) int {
 			n++
 		}
 	}
-	if x+1 < c {
-		f(x+1, y)
+	if x + 1 < c {
+		f(x + 1, y)
 	}
-	if x-1 >= 0 {
-		f(x-1, y)
+	if x - 1 >= 0 {
+		f(x - 1, y)
 	}
-	if y+1 < r {
-		f(x, y+1)
-		if x+1 < c {
-			f(x+1, y+1)
+	if y + 1 < r {
+		f(x, y + 1)
+		if x + 1 < c {
+			f(x + 1, y + 1)
 		}
-		if x-1 >= 0 {
-			f(x-1, y+1)
+		if x - 1 >= 0 {
+			f(x - 1, y + 1)
 		}
 	}
-	if y-1 >= 0 {
-		f(x, y-1)
-		if x+1 < c {
-			f(x+1, y-1)
+	if y - 1 >= 0 {
+		f(x, y - 1)
+		if x + 1 < c {
+			f(x + 1, y - 1)
 		}
-		if x-1 >= 0 {
-			f(x-1, y-1)
+		if x - 1 >= 0 {
+			f(x - 1, y - 1)
 		}
 	}
 	return n
@@ -737,10 +754,10 @@ func (p *Player) isle0(x, y int, result *[]int, visited map[int]bool) {
 	visited[i] = true
 	if p.tiles[y][x].value == Unknown {
 		*result = append(*result, i)
-		p.isle0(x-1, y, result, visited)
-		p.isle0(x+1, y, result, visited)
-		p.isle0(x, y-1, result, visited)
-		p.isle0(x, y+1, result, visited)
+		p.isle0(x - 1, y, result, visited)
+		p.isle0(x + 1, y, result, visited)
+		p.isle0(x, y - 1, result, visited)
+		p.isle0(x, y + 1, result, visited)
 	}
 }
 
@@ -786,10 +803,10 @@ func (p *Player) click(b *Board, x, y int) {
 	}
 
 	if t == 0 {
-		p.click(b, x-1, y)
-		p.click(b, x+1, y)
-		p.click(b, x, y-1)
-		p.click(b, x, y+1)
+		p.click(b, x - 1, y)
+		p.click(b, x + 1, y)
+		p.click(b, x, y - 1)
+		p.click(b, x, y + 1)
 	}
 }
 
@@ -797,7 +814,7 @@ func (p *Player) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16*p.col, 16*p.row
+	width, height := 16 * p.col, 16 * p.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range p.tiles {
 		for x, t := range p.tiles[y] {
@@ -810,7 +827,7 @@ func (p *Player) dump(outpath string) {
 			} else if v == Flag {
 				imgFile = "flag.png"
 			}
-			render(img, 16*x, 16*y, imgFile)
+			render(img, 16 * x, 16 * y, imgFile)
 		}
 	}
 	png.Encode(file, img)
