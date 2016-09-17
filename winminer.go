@@ -582,7 +582,6 @@ func (p *Player) findSafe() []int {
 				}
 			}
 		}
-
 	}
 
 	if len(safe) == 0 && p.mine > 0 {
@@ -630,7 +629,7 @@ func combinations(n, m int, f func([]int)) {
 }
 
 func (ic *IsleContext) solve() ([]int, error) {
-	solutions := 0
+	solutions := []*intset.IntSet{}
 	combinations(len(ic.isle), ic.mine,
 		func(s []int) {
 			for _, e := range s {
@@ -638,8 +637,10 @@ func (ic *IsleContext) solve() ([]int, error) {
 				ic.player.tiles[y][x].value = Flag
 			}
 			if ic.player.isConsistent() {
-				solutions++
 				ic.safe = ic.player.collect(isUnknown)
+				var x intset.IntSet
+				x.AddAll(ic.safe...)
+				solutions = append(solutions, &x)
 				ic.mines = make([]int, ic.mine)
 				for i, e := range s {
 					ic.mines[i] = ic.isle[e]
@@ -650,18 +651,26 @@ func (ic *IsleContext) solve() ([]int, error) {
 				ic.player.tiles[y][x].value = Unknown
 			}
 		})
-
-	if solutions == 1 {
+	if len(solutions) == 0 {
+		return nil, errors.New("found no solution")
+	}
+	if len(solutions) == 1 {
 		ic.player.mine = 0
 		for _, e := range ic.mines {
 			x, y := toXY(e, ic.player.col)
 			ic.player.tiles[y][x].value = Flag
 		}
 		return ic.safe, nil
-	} else if solutions == 0 {
-		return nil, errors.New("found no solution")
 	}
-	return nil, errors.New("found multiple solutions")
+	// If all possible solutions share the same safe tiles, they must be safe
+	s0 := solutions[0].Copy()
+	for _, s := range solutions {
+		s0.IntersectWith(s)
+	}
+	if s0.Len() > 0 {
+		return s0.Elems(), nil
+	}
+	return nil, errors.New("found multiple solutions but none sure safe")
 }
 
 func (p *Player) isConsistent() bool {
