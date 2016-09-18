@@ -83,9 +83,10 @@ func genBenchCase(level int, rng *rand.Rand) {
 	for i := 0; i < tiles; i++ {
 		mineCandidates[i] = i
 	}
+	initClick := toIndex(INIT_X, INIT_Y, col)
 	for i := 0; i < mine; {
 		mineTile := rng.Intn(len(mineCandidates))
-		if mineCandidates[mineTile] == toIndex(INIT_X, INIT_Y, col) {
+		if mineCandidates[mineTile] == initClick {
 			/* According to winmine game implementation, the board will be re-shuffled when first click on a mine.
 			 * We simply fix the first click by avoiding putting a mine on it.
 			 */
@@ -840,9 +841,13 @@ func (p *Player) click(b *Board, x, y int) {
 
 	if t == 0 {
 		p.click(b, x - 1, y)
+		p.click(b, x - 1, y - 1)
 		p.click(b, x + 1, y)
+		p.click(b, x + 1, y + 1)
 		p.click(b, x, y - 1)
+		p.click(b, x + 1, y - 1)
 		p.click(b, x, y + 1)
+		p.click(b, x - 1, y + 1)
 	}
 }
 
