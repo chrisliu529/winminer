@@ -409,8 +409,41 @@ func inSlice(i int, s []int) bool {
 }
 
 func (p *Player) doGuess() (int, int) {
-	return p.one(isUnknown)
+	switch p.guess % 4 {
+	case 0:
+		//search from left upper
+		return p.one(isUnknown)
+	case 1:
+		//search from right bottom
+		for y := p.row-1; y >=0; y -- {
+			for x := p.col-1; x >= 0; x -- {
+				if isUnknown(&p.tiles[y][x]) {
+					return x, y
+				}
+			}
+		}
+	case 2:
+		//search from left bottom
+		for y := p.row-1; y >=0; y -- {
+			for x := 0; x < p.col; x ++ {
+				if isUnknown(&p.tiles[y][x]) {
+					return x, y
+				}
+			}
+		}
+	case 3:
+		//search from right upper
+		for y := 0; y < p.row; y ++ {
+			for x := p.col-1; x >= 0; x -- {
+				if isUnknown(&p.tiles[y][x]) {
+					return x, y
+				}
+			}
+		}
+	}
+	return -1, -1 //never reached here
 }
+
 
 func (p *Player) refreshView() error {
 	p.view = make(map[*intset.IntSet]int)
