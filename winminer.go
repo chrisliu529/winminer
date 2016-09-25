@@ -30,9 +30,8 @@ var (
 		{16, 30, 99},
 	}
 	images map[string]image.Image
+	dumpPng bool
 )
-
-var dumpPng bool;
 
 func main() {
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
@@ -48,7 +47,9 @@ func main() {
 	if *gb {
 		genBench(*n, *s, *level)
 	} else {
-		images = loadImages()
+		if dumpPng {
+			images = loadImages()
+		}
 		runBench(*f)
 	}
 }
@@ -131,8 +132,10 @@ func check(e error) {
 }
 
 func runBench(filename string) {
-	var win, lose, total int
+	var total int
 	var sure, guess, total_clicks int
+	wins := make([]int, 3)
+	loses := make([]int, 3)
 	text, err := ioutil.ReadFile(filename)
 	check(err)
 	lines := strings.Split(string(text), "\n")
@@ -147,18 +150,20 @@ func runBench(filename string) {
 			player := initPlayer(board, i)
 			res := player.play(board)
 			if res == Win {
-				win++
+				wins[board.level-1]++
 			} else {
 				player.dump(fmt.Sprintf("f%s.png", player.gamename))
-				lose++
+				loses[board.level-1]++
 			}
 			sure += player.sure
 			guess += player.guess
 			total_clicks += (player.sure + player.guess)
 		}
 	}
-	fmt.Printf("win: %.2f, lose: %.2f\n",
-		float64(win) / float64(total),
+	win := sumSlice(wins)
+	lose := sumSlice(loses)
+	fmt.Printf("win: %.2f (%d, %d, %d), lose: %.2f\n",
+		float64(win) / float64(total), wins[0], wins[1], wins[2],
 		float64(lose) / float64(total))
 	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n",
 		sure,
@@ -423,6 +428,14 @@ func inSlice(i int, s []int) bool {
 		}
 	}
 	return false
+}
+
+func sumSlice(s []int) int {
+	res := 0
+	for _, e := range s {
+		res += e
+	}
+	return res
 }
 
 func (p *Player) doGuess() (int, int) {

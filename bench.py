@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import re
 
 def get_output(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -12,15 +13,23 @@ def get_output(cmd):
         sys.exit(p.returncode)
     return out.rstrip() #remove '\n' in the end
 
-def win_ratio(s):
-    return float(s.split(',')[0].split()[1])
+def wins(s):
+    return [int(w) for w in re.match(r'.*\((.*)\).*', s).group(1).split(',')]
+
+def score(w):
+    return w[0] + 2*w[1] + 4*w[2]
+
+def ratio(w):
+    return [w[0]/1000.0, w[1]/500.0, w[2]/250.0]
 
 def bench():
-    r = win_ratio(get_output("./winminer | grep win:"))
-    print 'win_ratio=%s' % r
+    out = get_output("./winminer | grep win:")
+    ws = wins(out)
+    si = score(ws)
+    print 'score=%s %s %s' % (si, ws, ratio(ws))
     if len(sys.argv) == 1:
         return
-    if r > float(sys.argv[1]):
+    if si > int(sys.argv[1]):
         sys.exit(0)
     sys.exit(1)
 
