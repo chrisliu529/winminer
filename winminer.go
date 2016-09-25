@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sort"
 )
 
 type LevelConfig struct {
@@ -25,12 +26,15 @@ type LevelConfig struct {
 var (
 	levelConfigs = []LevelConfig{
 		{9, 9, 10},
+		{16, 16, 40},
+		{16, 30, 99},
 	}
 	images map[string]image.Image
 )
 
 func main() {
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
+	level := flag.Int("lv", 1, "game level (1-3)")
 	n := flag.Int("n", 1, "number of benchmark cases")
 	s := flag.Int("s", 0, "random seed for generating benchmark cases")
 	f := flag.String("f", "cases.txt", "input file of benchmark cases")
@@ -38,7 +42,6 @@ func main() {
 	flag.Parse()
 
 	if *gb {
-		level := flag.Int("lv", 1, "game level (1-3)")
 		genBench(*n, *s, *level)
 	} else {
 		images = loadImages()
@@ -69,16 +72,29 @@ func loadImages() map[string]image.Image {
 func genBench(n, s, level int) {
 	rng := rand.New(rand.NewSource(int64(s)))
 	for i := 0; i < n; i++ {
-		genBenchCase(level, rng)
+		bc := benchCase(level, rng)
+		sort.Ints(bc)
+		printBenchCase(bc)
 	}
 }
 
-func genBenchCase(level int, rng *rand.Rand) {
+func printBenchCase(bc []int) {
+	for i := range bc {
+		if i > 0 {
+			fmt.Print(",")
+		}
+		fmt.Printf("%d", bc[i])
+	}
+	fmt.Print("\n")
+}
+
+func benchCase(level int, rng *rand.Rand) []int {
 	lc := levelConfigs[level - 1]
 	row := lc.row
 	col := lc.column
 	tiles := row * col
 	mine := lc.mine
+	res := make([]int, mine)
 	mineCandidates := make([]int, tiles)
 	for i := 0; i < tiles; i++ {
 		mineCandidates[i] = i
@@ -92,14 +108,11 @@ func genBenchCase(level int, rng *rand.Rand) {
 			 */
 			continue
 		}
-		if i > 0 {
-			fmt.Print(",")
-		}
-		fmt.Printf("%d", mineCandidates[mineTile])
-		mineCandidates = remove(mineCandidates, mineTile)
+		res[i] = mineCandidates[mineTile]
 		i++
+		mineCandidates = remove(mineCandidates, mineTile)
 	}
-	fmt.Print("\n")
+	return res
 }
 
 func remove(slice []int, i int) []int {
@@ -141,13 +154,13 @@ func runBench(filename string) {
 		}
 	}
 	fmt.Printf("win: %.2f, lose: %.2f\n",
-			float64(win) / float64(total),
-			float64(lose) / float64(total))
+		float64(win) / float64(total),
+		float64(lose) / float64(total))
 	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n",
-			sure,
-			float64(sure) / float64(total_clicks),
-			guess,
-			float64(guess) / float64(total_clicks))
+		sure,
+		float64(sure) / float64(total_clicks),
+		guess,
+		float64(guess) / float64(total_clicks))
 }
 
 type TileInt int
@@ -187,7 +200,8 @@ func toInt(ss []string) []int {
 func (b *Board) setMines(mines []int) {
 	b.initTiles()
 	for _, mine := range mines {
-		b.setMine(mine)
+		x, y := toXY(mine, b.col)
+		b.tiles[y][x] = -1
 	}
 	b.setHints()
 }
@@ -236,11 +250,6 @@ func (b *Board) getNeighbors(x, y int) []*TileInt {
 		}
 	}
 	return tiles
-}
-
-func (b *Board) setMine(mine int) {
-	x, y := toXY(mine, len(b.tiles))
-	b.tiles[y][x] = -1
 }
 
 func toXY(index, column int) (int, int) {
@@ -380,7 +389,7 @@ func (p *Player) play(b *Board) int {
 			break
 		}
 		if len(safe) == 0 {
-			fmt.Println("now we have to guess... start searching tiles with least mine probability")
+			fmt.Println("now we have to guess...")
 			x, y := p.doGuess()
 			fmt.Printf("guess at (%d, %d)\n", x, y)
 			p.guess++
@@ -416,8 +425,8 @@ func (p *Player) doGuess() (int, int) {
 		return p.one(isUnknown)
 	case 1:
 		//search from right bottom
-		for y := p.row-1; y >=0; y -- {
-			for x := p.col-1; x >= 0; x -- {
+		for y := p.row - 1; y >= 0; y -- {
+			for x := p.col - 1; x >= 0; x -- {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
 				}
@@ -425,7 +434,7 @@ func (p *Player) doGuess() (int, int) {
 		}
 	case 2:
 		//search from left bottom
-		for y := p.row-1; y >=0; y -- {
+		for y := p.row - 1; y >= 0; y -- {
 			for x := 0; x < p.col; x ++ {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
@@ -435,7 +444,7 @@ func (p *Player) doGuess() (int, int) {
 	case 3:
 		//search from right upper
 		for y := 0; y < p.row; y ++ {
-			for x := p.col-1; x >= 0; x -- {
+			for x := p.col - 1; x >= 0; x -- {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
 				}
@@ -444,7 +453,6 @@ func (p *Player) doGuess() (int, int) {
 	}
 	return -1, -1 //never reached here
 }
-
 
 func (p *Player) refreshView() error {
 	p.view = make(map[*intset.IntSet]int)
