@@ -32,15 +32,19 @@ var (
 	images map[string]image.Image
 )
 
+var dumpPng bool;
+
 func main() {
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	level := flag.Int("lv", 1, "game level (1-3)")
 	n := flag.Int("n", 1, "number of benchmark cases")
 	s := flag.Int("s", 0, "random seed for generating benchmark cases")
 	f := flag.String("f", "cases.txt", "input file of benchmark cases")
+	d := flag.Bool("d", false, "dump board into .png file or not")
 
 	flag.Parse()
 
+	dumpPng = *d
 	if *gb {
 		genBench(*n, *s, *level)
 	} else {
@@ -282,6 +286,9 @@ func (b *Board) String() string {
 }
 
 func (b *Board) dump(outpath string) {
+	if ! dumpPng {
+		return
+	}
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
@@ -860,6 +867,9 @@ func (p *Player) click(b *Board, x, y int) {
 }
 
 func (p *Player) dump(outpath string) {
+	if ! dumpPng {
+		return
+	}
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
