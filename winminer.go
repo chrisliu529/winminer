@@ -30,7 +30,7 @@ var (
 		{16, 30, 99},
 	}
 	images map[string]image.Image
-	dumpPng bool
+	dumpPng int
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 	n := flag.Int("n", 1, "number of benchmark cases")
 	s := flag.Int("s", 0, "random seed for generating benchmark cases")
 	f := flag.String("f", "cases.txt", "input file of benchmark cases")
-	d := flag.Bool("d", false, "dump board into .png file or not")
+	d := flag.Int("d", 0, "dump board into .png file - 0: don't dump; 1: only dump worthy failures; 2: dump all")
 
 	flag.Parse()
 
@@ -47,7 +47,7 @@ func main() {
 	if *gb {
 		genBench(*n, *s, *level)
 	} else {
-		if dumpPng {
+		if dumpPng > 0 {
 			images = loadImages()
 		}
 		runBench(*f)
@@ -146,14 +146,18 @@ func runBench(filename string) {
 			total++
 			board := initBoard(toInt(mines))
 			fmt.Println(board)
-			board.dump(fmt.Sprintf("%d.png", i))
+			if dumpPng == 2 {
+				board.dump(fmt.Sprintf("%d.png", i))
+			}
 			player := initPlayer(board, i)
 			res := player.play(board)
 			if res == Win {
-				wins[board.level-1]++
+				wins[board.level - 1]++
 			} else {
-				player.dump(fmt.Sprintf("f%s.png", player.gamename))
-				loses[board.level-1]++
+				if player.worthDump() {
+					player.dump(fmt.Sprintf("f%s.png", player.gamename))
+				}
+				loses[board.level - 1]++
 			}
 			sure += player.sure
 			guess += player.guess
@@ -291,9 +295,6 @@ func (b *Board) String() string {
 }
 
 func (b *Board) dump(outpath string) {
-	if ! dumpPng {
-		return
-	}
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
@@ -879,10 +880,17 @@ func (p *Player) click(b *Board, x, y int) {
 	}
 }
 
-func (p *Player) dump(outpath string) {
-	if ! dumpPng {
-		return
+func (p *Player) worthDump() bool {
+	if dumpPng == 0 {
+		return false
 	}
+	if dumpPng == 2 {
+		return true
+	}
+	return p.sure >= 10
+}
+
+func (p *Player) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
