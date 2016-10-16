@@ -134,8 +134,8 @@ func check(e error) {
 func runBench(filename string) {
 	var total int
 	var sure, guess, total_clicks int
-	wins := make([]int, 3)
-	loses := make([]int, 3)
+	wins := make([]int, len(levelConfigs))
+	loses := make([]int, len(levelConfigs))
 	text, err := ioutil.ReadFile(filename)
 	check(err)
 	lines := strings.Split(string(text), "\n")
