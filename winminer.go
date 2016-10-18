@@ -642,13 +642,56 @@ func (p *Player) findSafe() []int {
 	}
 
 	if len(safe) == 0 && p.mine > 0 {
-		if p.mine < 5 {
+		safe = p.findReverse()
+		if len(safe) == 0 && p.mine < 5 {
 			safe = p.findIsle()
 		}
 	}
 	return safe
 }
 
+func (p *Player) findReverse() []int {
+	fmt.Println("start reverse searching by counting down remained mines")
+	safe := []int{}
+	us := p.collect(isUnknown)
+	visited := make(map[int]bool)
+	for _, e := range us {
+		visited[e] = false
+	}
+	m := p.mine
+	for s, v := range p.view {
+		toReduce := true
+		for _, e := range s.Elems() {
+			if visited[e] {
+				toReduce = false
+				break
+			}
+			visited[e] = true
+		}
+		if toReduce {
+			m -= v
+			if m < 0 {
+				panic("internal error")
+			}
+			if m == 0 {
+				for k := range visited {
+					if !visited[k] {
+						safe = append(safe, k)
+					}
+				}
+				return safe
+			}
+		}
+	}
+	return safe
+}
+
+/*TODO: the O(n) method below looks very ugly...
+However, it may be an overkill to add 2 more maps:
+1. string->*intset.IntSet
+2. string->int
+to work around the map keys equal issue
+*/
 func (p *Player) viewKey(s *intset.IntSet) *intset.IntSet {
 	for s2 := range p.view {
 		if s.String() == s2.String() {
