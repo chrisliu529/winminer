@@ -1,8 +1,8 @@
 # winminer
 
-A small console tool to assist winmine game in windows XP in C code. It reads the layout of field by reading pixels and judge where the bombs are by analysing.
+A small console tool to assist winmine game in windows XP in C code. It reads the layout of field by reading pixels and analyzes the bombs location.
 
-The original version is placed in winxp branch and must be complied with mingw under Windows system. Due to the changes in winmine game UI, this version ONLY works on XP.
+The original version is in winxp branch and must be complied with mingw under Windows system. Due to the changes in winmine game UI, this version ONLY works on XP.
 
 A new version (master branch) is a rewrite in golang to focus on the AI improvements.
 
