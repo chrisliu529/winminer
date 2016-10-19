@@ -20,7 +20,7 @@ def score(w):
     return w[0] + 2*w[1] + 4*w[2]
 
 def ratio(w):
-    return [w[0]/1000.0, w[1]/500.0, w[2]/250.0]
+    return [('%s%%' % int(round(f*100))) for f in [w[0]/10000.0, w[1]/5000.0, w[2]/2500.0]]
 
 def bench():
     out = get_output("./winminer | grep win:")
