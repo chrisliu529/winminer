@@ -645,6 +645,7 @@ func (p *Player) findSafe() []int {
 		//as map iteration is random in golang
 		//try shooting for 10 times
 		for shoot := 0; shoot < 10; shoot ++ {
+			fmt.Printf("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
 			safe = p.findReverse()
 			if len(safe) > 0 {
 				return safe
@@ -658,7 +659,6 @@ func (p *Player) findSafe() []int {
 }
 
 func (p *Player) findReverse() []int {
-	fmt.Println("start reverse searching by counting down remained mines")
 	safe := []int{}
 	us := p.collect(isUnknown)
 	visited := make(map[int]bool)
