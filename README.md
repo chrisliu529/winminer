@@ -10,6 +10,6 @@ A new version (master branch) is a rewrite in golang to focus on the AI improvem
 
 | Level | Beginner | Intermediate | Expert |
 |-------|:--------:|:--------------:|:--------:|
-| Win   |    86%   |      66%     |   25%  |
+| Win   |    86%   |      69%     |   25%  |
 
 [ ![Codeship Status for chrisliu529/winminer](https://codeship.com/projects/d583a910-deff-0133-8b3b-12efcaf3d9f4/status?branch=master)](https://codeship.com/projects/144898)
