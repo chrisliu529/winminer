@@ -16,6 +16,6 @@ A new version (master branch) is a rewrite in golang to focus on the AI improvem
 
 *How to Run Benchmark*
 
-./gen_cases.sh  && ./bench.py 
+go build && ./gen_cases.sh  && ./bench.py
 
 It would take a few minutes.

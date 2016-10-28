@@ -553,7 +553,6 @@ func (p *Player) findSafe() []int {
 	stateChanged = true
 	safe := []int{}
 	for stateChanged || needRefresh {
-		n := 0
 		stateChanged = false
 		if needRefresh {
 			err := p.refreshView()
@@ -563,8 +562,6 @@ func (p *Player) findSafe() []int {
 		}
 		needRefresh = false
 		for s, v := range p.view {
-			n++
-			fmt.Println(n, s, v)
 			if v == s.Len() {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
