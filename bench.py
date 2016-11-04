@@ -3,6 +3,7 @@
 import subprocess
 import sys
 import re
+import time
 
 def get_output(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -23,7 +24,9 @@ def ratio(w):
     return [('%s%%' % int(round(f*100))) for f in [w[0]/10000.0, w[1]/5000.0, w[2]/2500.0]]
 
 def bench():
+    t = time.time()
     out = get_output("./winminer | grep win:")
+    print 'Finish benchmark in %.2f seconds' % (time.time() - t)
     ws = wins(out)
     si = score(ws)
     print 'score=%s %s %s' % (si, ws, ratio(ws))
