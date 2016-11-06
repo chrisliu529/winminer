@@ -440,12 +440,25 @@ func sumSlice(s []int) int {
 }
 
 func (p *Player) doGuess() (int, int) {
-	switch p.guess % 4 {
-	case 0:
-		//search from left upper
+	corners := func() (int, int) {
+		if isUnknown(&p.tiles[0][0]) {
+			return 0, 0
+		}
+		if isUnknown(&p.tiles[p.row - 1][p.col - 1]) {
+			return p.col - 1, p.row - 1
+		}
+		if isUnknown(&p.tiles[p.row - 1][0]) {
+			return 0, p.row - 1
+		}
+		if isUnknown(&p.tiles[0][p.col - 1]) {
+			return p.col - 1, 0
+		}
+		return -1, -1
+	}
+	leftUpper := func() (int, int) {
 		return p.one(isUnknown)
-	case 1:
-		//search from right bottom
+	}
+	rightBottom := func() (int, int) {
 		for y := p.row - 1; y >= 0; y -- {
 			for x := p.col - 1; x >= 0; x -- {
 				if isUnknown(&p.tiles[y][x]) {
@@ -453,8 +466,9 @@ func (p *Player) doGuess() (int, int) {
 				}
 			}
 		}
-	case 2:
-		//search from left bottom
+		return -1, -1
+	}
+	leftBottom := func() (int, int) {
 		for y := p.row - 1; y >= 0; y -- {
 			for x := 0; x < p.col; x ++ {
 				if isUnknown(&p.tiles[y][x]) {
@@ -462,8 +476,9 @@ func (p *Player) doGuess() (int, int) {
 				}
 			}
 		}
-	case 3:
-		//search from right upper
+		return -1, -1
+	}
+	rightUpper := func() (int, int) {
 		for y := 0; y < p.row; y ++ {
 			for x := p.col - 1; x >= 0; x -- {
 				if isUnknown(&p.tiles[y][x]) {
@@ -471,8 +486,14 @@ func (p *Player) doGuess() (int, int) {
 				}
 			}
 		}
+		return -1, -1
 	}
-	return -1, -1 //never reached here
+	methods := []func() (int, int){leftUpper, rightBottom, leftBottom, rightUpper}
+	x, y := corners()
+	if x < 0 {
+		x, y = methods[p.guess % 4]()
+	}
+	return x, y
 }
 
 func (p *Player) refreshView() error {
