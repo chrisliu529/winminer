@@ -5,31 +5,32 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/chrisliu529/gopl.io/ch6/intset"
 	"image"
 	"image/png"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
-	"sort"
+
+	"github.com/chrisliu529/gopl.io/ch6/intset"
 )
 
-type LevelConfig struct {
+type levelConfig struct {
 	row    int
 	column int
 	mine   int
 }
 
 var (
-	levelConfigs = []LevelConfig{
+	levelConfigs = []levelConfig{
 		{9, 9, 10},
 		{16, 16, 40},
 		{16, 30, 99},
 	}
-	images map[string]image.Image
+	images  map[string]image.Image
 	dumpPng int
 )
 
@@ -94,7 +95,7 @@ func printBenchCase(bc []int) {
 }
 
 func benchCase(level int, rng *rand.Rand) []int {
-	lc := levelConfigs[level - 1]
+	lc := levelConfigs[level-1]
 	row := lc.row
 	col := lc.column
 	tiles := row * col
@@ -104,12 +105,12 @@ func benchCase(level int, rng *rand.Rand) []int {
 	for i := 0; i < tiles; i++ {
 		mineCandidates[i] = i
 	}
-	initClick := toIndex(INIT_X, INIT_Y, col)
+	initClick := toIndex(initx, inity, col)
 	for i := 0; i < mine; {
 		mineTile := rng.Intn(len(mineCandidates))
 		if mineCandidates[mineTile] == initClick {
 			/* According to winmine game implementation, the board will be re-shuffled when first click on a mine.
-			 * We simply fix the first click by avoiding putting a mine on it.
+			* We simply fix the first click by avoiding putting a mine on it.
 			 */
 			continue
 		}
@@ -121,8 +122,8 @@ func benchCase(level int, rng *rand.Rand) []int {
 }
 
 func remove(slice []int, i int) []int {
-	copy(slice[i:], slice[i + 1:])
-	return slice[:len(slice) - 1]
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
 }
 
 func check(e error) {
@@ -133,7 +134,7 @@ func check(e error) {
 
 func runBench(filename string) {
 	var total int
-	var sure, guess, total_clicks int
+	var sure, guess, totalClicks int
 	wins := make([]int, len(levelConfigs))
 	loses := make([]int, len(levelConfigs))
 	text, err := ioutil.ReadFile(filename)
@@ -151,34 +152,34 @@ func runBench(filename string) {
 			}
 			player := initPlayer(board, i)
 			res := player.play(board)
-			if res == Win {
-				wins[board.level - 1]++
+			if res == tsWin {
+				wins[board.level-1]++
 			} else {
 				if player.worthDump() {
 					player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				}
-				loses[board.level - 1]++
+				loses[board.level-1]++
 			}
 			sure += player.sure
 			guess += player.guess
-			total_clicks += (player.sure + player.guess)
+			totalClicks += (player.sure + player.guess)
 		}
 	}
 	win := sumSlice(wins)
 	lose := sumSlice(loses)
 	fmt.Printf("win: %.2f (%d, %d, %d), lose: %.2f\n",
-		float64(win) / float64(total), wins[0], wins[1], wins[2],
-		float64(lose) / float64(total))
+		float64(win)/float64(total), wins[0], wins[1], wins[2],
+		float64(lose)/float64(total))
 	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n",
 		sure,
-		float64(sure) / float64(total_clicks),
+		float64(sure)/float64(totalClicks),
 		guess,
-		float64(guess) / float64(total_clicks))
+		float64(guess)/float64(totalClicks))
 }
 
-type TileInt int
-type Board struct {
-	tiles  [][]TileInt
+type tileInt int
+type board struct {
+	tiles  [][]tileInt
 	level  int
 	row    int
 	col    int
@@ -187,15 +188,15 @@ type Board struct {
 }
 
 const (
-	INIT_X = 5
-	INIT_Y = 5
+	initx = 5
+	inity = 5
 )
 
-func initBoard(mines []int) *Board {
+func initBoard(mines []int) *board {
 	fmt.Println("init board with ", mines, len(mines))
 	level, err := getLevel(len(mines))
 	check(err)
-	b := &Board{level: level, status: 0}
+	b := &board{level: level, status: 0}
 	b.setMines(mines)
 	return b
 }
@@ -210,7 +211,7 @@ func toInt(ss []string) []int {
 	return res
 }
 
-func (b *Board) setMines(mines []int) {
+func (b *board) setMines(mines []int) {
 	b.initTiles()
 	for _, mine := range mines {
 		x, y := toXY(mine, b.col)
@@ -219,7 +220,7 @@ func (b *Board) setMines(mines []int) {
 	b.setHints()
 }
 
-func (b *Board) setHints() {
+func (b *board) setHints() {
 	for y := range b.tiles {
 		for x := range b.tiles[y] {
 			if b.tiles[y][x] != 0 {
@@ -235,31 +236,31 @@ func (b *Board) setHints() {
 	}
 }
 
-func (b *Board) getNeighbors(x, y int) []*TileInt {
+func (b *board) getNeighbors(x, y int) []*tileInt {
 	r, c := b.row, b.col
-	tiles := []*TileInt{}
-	if x + 1 < c {
-		tiles = append(tiles, &b.tiles[y][x + 1])
+	tiles := []*tileInt{}
+	if x+1 < c {
+		tiles = append(tiles, &b.tiles[y][x+1])
 	}
-	if x - 1 >= 0 {
-		tiles = append(tiles, &b.tiles[y][x - 1])
+	if x-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y][x-1])
 	}
-	if y + 1 < r {
-		tiles = append(tiles, &b.tiles[y + 1][x])
-		if x + 1 < c {
-			tiles = append(tiles, &b.tiles[y + 1][x + 1])
+	if y+1 < r {
+		tiles = append(tiles, &b.tiles[y+1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y+1][x+1])
 		}
-		if x - 1 >= 0 {
-			tiles = append(tiles, &b.tiles[y + 1][x - 1])
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y+1][x-1])
 		}
 	}
-	if y - 1 >= 0 {
-		tiles = append(tiles, &b.tiles[y - 1][x])
-		if x + 1 < c {
-			tiles = append(tiles, &b.tiles[y - 1][x + 1])
+	if y-1 >= 0 {
+		tiles = append(tiles, &b.tiles[y-1][x])
+		if x+1 < c {
+			tiles = append(tiles, &b.tiles[y-1][x+1])
 		}
-		if x - 1 >= 0 {
-			tiles = append(tiles, &b.tiles[y - 1][x - 1])
+		if x-1 >= 0 {
+			tiles = append(tiles, &b.tiles[y-1][x-1])
 		}
 	}
 	return tiles
@@ -270,15 +271,15 @@ func toXY(index, column int) (int, int) {
 }
 
 func toIndex(x, y, column int) int {
-	return y * column + x
+	return y*column + x
 }
 
-func (b *Board) initTiles() {
-	c := levelConfigs[b.level - 1]
+func (b *board) initTiles() {
+	c := levelConfigs[b.level-1]
 	b.row, b.col, b.mine = c.row, c.column, c.mine
-	b.tiles = make([][]TileInt, b.row)
+	b.tiles = make([][]tileInt, b.row)
 	for i := range b.tiles {
-		t := make([]TileInt, b.col)
+		t := make([]tileInt, b.col)
 		for j := range t {
 			t[j] = 0
 		}
@@ -286,7 +287,7 @@ func (b *Board) initTiles() {
 	}
 }
 
-func (b *Board) String() string {
+func (b *board) String() string {
 	var buf bytes.Buffer
 	for y := range b.tiles {
 		fmt.Println(&buf, b.tiles[y])
@@ -294,11 +295,11 @@ func (b *Board) String() string {
 	return buf.String()
 }
 
-func (b *Board) dump(outpath string) {
+func (b *board) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16 * b.col, 16 * b.row
+	width, height := 16*b.col, 16*b.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range b.tiles {
 		for x, v := range b.tiles[y] {
@@ -306,7 +307,7 @@ func (b *Board) dump(outpath string) {
 			if v >= 0 {
 				imgFile = fmt.Sprintf("%d.png", v)
 			}
-			render(img, 16 * x, 16 * y, imgFile)
+			render(img, 16*x, 16*y, imgFile)
 		}
 	}
 	png.Encode(file, img)
@@ -319,12 +320,12 @@ func render(img *image.RGBA, x int, y int, filename string) {
 	}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
-			img.Set(x + i, y + j, srcImg.At(i, j))
+			img.Set(x+i, y+j, srcImg.At(i, j))
 		}
 	}
 }
 
-func (t *TileInt) isMine() bool {
+func (t *tileInt) isMine() bool {
 	return *t == -1
 }
 
@@ -337,21 +338,22 @@ func getLevel(n int) (level int, err error) {
 	return level, errors.New("Level not found")
 }
 
-type TileExt struct {
+type tileExit struct {
 	value    int
 	revealed bool
 }
 
 const (
-	Unknown = 10 + iota
-	Boom    //mine clicked, game over
-	Flag    //mine marked
-	Win
-	Lose
+	//tile statuses
+	tsUnknown = 10 + iota
+	tsBoom    //mine clicked, game over
+	tsFlag    //mine marked
+	tsWin
+	tsLose
 )
 
-type Player struct {
-	tiles    [][]TileExt
+type player struct {
+	tiles    [][]tileExit
 	view     map[*intset.IntSet]int
 	sure     int
 	guess    int
@@ -361,30 +363,30 @@ type Player struct {
 	gamename string
 }
 
-func initPlayer(b *Board, i int) *Player {
+func initPlayer(b *board, i int) *player {
 	fmt.Println("init player with level ", b.level)
-	p := &Player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level, i)}
+	p := &player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level, i)}
 	p.init(b)
 	return p
 }
 
-func (p *Player) init(b *Board) {
+func (p *player) init(b *board) {
 	p.row, p.col, p.mine = b.row, b.col, b.mine
-	p.tiles = make([][]TileExt, p.row)
+	p.tiles = make([][]tileExit, p.row)
 	for i := range p.tiles {
-		t := make([]TileExt, p.col)
+		t := make([]tileExit, p.col)
 		for j := range t {
-			t[j].value = Unknown
+			t[j].value = tsUnknown
 			t[j].revealed = false
 		}
 		p.tiles[i] = t
 	}
 }
 
-func (p *Player) play(b *Board) int {
+func (p *player) play(b *board) int {
 	step := 0
-	click_f := func(x, y int) {
-		if p.tiles[y][x].value == Unknown {
+	clickF := func(x, y int) {
+		if p.tiles[y][x].value == tsUnknown {
 			p.sure++
 			p.click(b, x, y)
 			step++
@@ -393,12 +395,12 @@ func (p *Player) play(b *Board) int {
 	for b.status == 0 {
 		if p.sure == 0 {
 			//always click the middle of board for the first step
-			click_f(INIT_X, INIT_Y)
+			clickF(initx, inity)
 			continue
 		}
 		safe := p.findSafe()
 		if p.mine == 0 {
-			b.status = Win
+			b.status = tsWin
 			break
 		}
 		if len(safe) == 0 {
@@ -411,15 +413,15 @@ func (p *Player) play(b *Board) int {
 			continue
 		}
 		for _, v := range safe {
-			click_f(toXY(v, p.col))
+			clickF(toXY(v, p.col))
 		}
 	}
-	if b.status == Win {
+	if b.status == tsWin {
 		fmt.Println("Win!")
-		return Win
+		return tsWin
 	}
 	fmt.Println("Lost!")
-	return Lose
+	return tsLose
 }
 
 func inSlice(i int, s []int) bool {
@@ -439,18 +441,18 @@ func sumSlice(s []int) int {
 	return res
 }
 
-func (p *Player) doGuess() (int, int) {
+func (p *player) doGuess() (int, int) {
 	corners := func() (int, int) {
 		if isUnknown(&p.tiles[0][0]) {
 			return 0, 0
 		}
-		if isUnknown(&p.tiles[p.row - 1][p.col - 1]) {
+		if isUnknown(&p.tiles[p.row-1][p.col-1]) {
 			return p.col - 1, p.row - 1
 		}
-		if isUnknown(&p.tiles[p.row - 1][0]) {
+		if isUnknown(&p.tiles[p.row-1][0]) {
 			return 0, p.row - 1
 		}
-		if isUnknown(&p.tiles[0][p.col - 1]) {
+		if isUnknown(&p.tiles[0][p.col-1]) {
 			return p.col - 1, 0
 		}
 		return -1, -1
@@ -459,8 +461,8 @@ func (p *Player) doGuess() (int, int) {
 		return p.one(isUnknown)
 	}
 	rightBottom := func() (int, int) {
-		for y := p.row - 1; y >= 0; y -- {
-			for x := p.col - 1; x >= 0; x -- {
+		for y := p.row - 1; y >= 0; y-- {
+			for x := p.col - 1; x >= 0; x-- {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
 				}
@@ -469,8 +471,8 @@ func (p *Player) doGuess() (int, int) {
 		return -1, -1
 	}
 	leftBottom := func() (int, int) {
-		for y := p.row - 1; y >= 0; y -- {
-			for x := 0; x < p.col; x ++ {
+		for y := p.row - 1; y >= 0; y-- {
+			for x := 0; x < p.col; x++ {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
 				}
@@ -479,8 +481,8 @@ func (p *Player) doGuess() (int, int) {
 		return -1, -1
 	}
 	rightUpper := func() (int, int) {
-		for y := 0; y < p.row; y ++ {
-			for x := p.col - 1; x >= 0; x -- {
+		for y := 0; y < p.row; y++ {
+			for x := p.col - 1; x >= 0; x-- {
 				if isUnknown(&p.tiles[y][x]) {
 					return x, y
 				}
@@ -491,12 +493,12 @@ func (p *Player) doGuess() (int, int) {
 	methods := []func() (int, int){leftUpper, rightBottom, leftBottom, rightUpper}
 	x, y := corners()
 	if x < 0 {
-		x, y = methods[p.guess % 4]()
+		x, y = methods[p.guess%4]()
 	}
 	return x, y
 }
 
-func (p *Player) refreshView() error {
+func (p *player) refreshView() error {
 	p.view = make(map[*intset.IntSet]int)
 	for y := range p.tiles {
 		for x, t := range p.tiles[y] {
@@ -517,58 +519,58 @@ func (p *Player) refreshView() error {
 	return nil
 }
 
-func (p *Player) circle(x, y, v int) (*intset.IntSet, int) {
+func (p *player) circle(x, y, v int) (*intset.IntSet, int) {
 	var s intset.IntSet
 	r, c := p.row, p.col
 
 	var f = func(xt, yt int) {
 		vt := p.tiles[yt][xt].value
-		if vt == Unknown {
+		if vt == tsUnknown {
 			s.Add(toIndex(xt, yt, c))
-		} else if vt == Flag {
+		} else if vt == tsFlag {
 			v--
 		}
 	}
-	if x + 1 < c {
-		f(x + 1, y)
+	if x+1 < c {
+		f(x+1, y)
 	}
-	if x - 1 >= 0 {
-		f(x - 1, y)
+	if x-1 >= 0 {
+		f(x-1, y)
 	}
-	if y + 1 < r {
-		f(x, y + 1)
-		if x + 1 < c {
-			f(x + 1, y + 1)
+	if y+1 < r {
+		f(x, y+1)
+		if x+1 < c {
+			f(x+1, y+1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y + 1)
+		if x-1 >= 0 {
+			f(x-1, y+1)
 		}
 	}
-	if y - 1 >= 0 {
-		f(x, y - 1)
-		if x + 1 < c {
-			f(x + 1, y - 1)
+	if y-1 >= 0 {
+		f(x, y-1)
+		if x+1 < c {
+			f(x+1, y-1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y - 1)
+		if x-1 >= 0 {
+			f(x-1, y-1)
 		}
 	}
 	return &s, v
 }
 
-func isUnknown(t *TileExt) bool {
-	return t.value == Unknown
+func isUnknown(t *tileExit) bool {
+	return t.value == tsUnknown
 }
 
-func isNumber(t *TileExt) bool {
+func isNumber(t *tileExit) bool {
 	return t.value >= 0 && t.value <= 8
 }
 
-func isFlag(t *TileExt) bool {
-	return t.value == Flag
+func isFlag(t *tileExit) bool {
+	return t.value == tsFlag
 }
 
-func (p *Player) findSafe() []int {
+func (p *player) findSafe() []int {
 	var stateChanged, needRefresh bool
 	needRefresh = true
 	stateChanged = true
@@ -587,8 +589,8 @@ func (p *Player) findSafe() []int {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
 					fmt.Println(x, y, p.tiles[y][x].value)
-					if p.tiles[y][x].value != Flag {
-						p.tiles[y][x].value = Flag
+					if p.tiles[y][x].value != tsFlag {
+						p.tiles[y][x].value = tsFlag
 						p.mine--
 						if p.mine == 0 {
 							return p.collect(isUnknown)
@@ -662,7 +664,7 @@ func (p *Player) findSafe() []int {
 	if len(safe) == 0 && p.mine > 0 {
 		//as map iteration is random in golang
 		//try shooting for 10 times
-		for shoot := 0; shoot < 10; shoot ++ {
+		for shoot := 0; shoot < 10; shoot++ {
 			fmt.Printf("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
 			safe = p.findReverse()
 			if len(safe) > 0 {
@@ -676,7 +678,7 @@ func (p *Player) findSafe() []int {
 	return safe
 }
 
-func (p *Player) findReverse() []int {
+func (p *player) findReverse() []int {
 	safe := []int{}
 	us := p.collect(isUnknown)
 	visited := make(map[int]bool)
@@ -717,7 +719,7 @@ However, it may be an overkill to add 2 more maps:
 2. string->int
 to work around the map keys equal issue
 */
-func (p *Player) viewKey(s *intset.IntSet) *intset.IntSet {
+func (p *player) viewKey(s *intset.IntSet) *intset.IntSet {
 	for s2 := range p.view {
 		if s.String() == s2.String() {
 			fmt.Println("view key found", s2)
@@ -727,8 +729,8 @@ func (p *Player) viewKey(s *intset.IntSet) *intset.IntSet {
 	return s
 }
 
-type IsleContext struct {
-	player *Player
+type isleContext struct {
+	player *player
 	mine   int
 	isle   []int
 	safe   []int
@@ -745,7 +747,7 @@ func combinations(n, m int, f func([]int)) {
 			if i == last {
 				f(s)
 			} else {
-				rc(i + 1, j + 1)
+				rc(i+1, j+1)
 			}
 		}
 		return
@@ -753,13 +755,13 @@ func combinations(n, m int, f func([]int)) {
 	rc(0, 0)
 }
 
-func (ic *IsleContext) solve() ([]int, error) {
+func (ic *isleContext) solve() ([]int, error) {
 	solutions := []*intset.IntSet{}
 	combinations(len(ic.isle), ic.mine,
 		func(s []int) {
 			for _, e := range s {
 				x, y := toXY(ic.isle[e], ic.player.col)
-				ic.player.tiles[y][x].value = Flag
+				ic.player.tiles[y][x].value = tsFlag
 			}
 			if ic.player.isConsistent() {
 				ic.safe = ic.player.collect(isUnknown)
@@ -773,7 +775,7 @@ func (ic *IsleContext) solve() ([]int, error) {
 			}
 			for _, e := range s {
 				x, y := toXY(ic.isle[e], ic.player.col)
-				ic.player.tiles[y][x].value = Unknown
+				ic.player.tiles[y][x].value = tsUnknown
 			}
 		})
 	if len(solutions) == 0 {
@@ -783,7 +785,7 @@ func (ic *IsleContext) solve() ([]int, error) {
 		ic.player.mine = 0
 		for _, e := range ic.mines {
 			x, y := toXY(e, ic.player.col)
-			ic.player.tiles[y][x].value = Flag
+			ic.player.tiles[y][x].value = tsFlag
 		}
 		return ic.safe, nil
 	}
@@ -798,7 +800,7 @@ func (ic *IsleContext) solve() ([]int, error) {
 	return nil, errors.New("found multiple solutions but none sure safe")
 }
 
-func (p *Player) isConsistent() bool {
+func (p *player) isConsistent() bool {
 	numbers := p.collect(isNumber)
 	for _, n := range numbers {
 		x, y := toXY(n, p.col)
@@ -811,7 +813,7 @@ func (p *Player) isConsistent() bool {
 	return true
 }
 
-func (p *Player) neighbors(x, y int, filter func(*TileExt) bool) int {
+func (p *player) neighbors(x, y int, filter func(*tileExit) bool) int {
 	r, c := p.row, p.col
 	n := 0
 	var f = func(xt, yt int) {
@@ -819,34 +821,34 @@ func (p *Player) neighbors(x, y int, filter func(*TileExt) bool) int {
 			n++
 		}
 	}
-	if x + 1 < c {
-		f(x + 1, y)
+	if x+1 < c {
+		f(x+1, y)
 	}
-	if x - 1 >= 0 {
-		f(x - 1, y)
+	if x-1 >= 0 {
+		f(x-1, y)
 	}
-	if y + 1 < r {
-		f(x, y + 1)
-		if x + 1 < c {
-			f(x + 1, y + 1)
+	if y+1 < r {
+		f(x, y+1)
+		if x+1 < c {
+			f(x+1, y+1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y + 1)
+		if x-1 >= 0 {
+			f(x-1, y+1)
 		}
 	}
-	if y - 1 >= 0 {
-		f(x, y - 1)
-		if x + 1 < c {
-			f(x + 1, y - 1)
+	if y-1 >= 0 {
+		f(x, y-1)
+		if x+1 < c {
+			f(x+1, y-1)
 		}
-		if x - 1 >= 0 {
-			f(x - 1, y - 1)
+		if x-1 >= 0 {
+			f(x-1, y-1)
 		}
 	}
 	return n
 }
 
-func (p *Player) findIsle() []int {
+func (p *player) findIsle() []int {
 	fmt.Printf("remained mines=%d, locating the isle\n", p.mine)
 	empty := []int{}
 	isle := p.isle()
@@ -858,7 +860,7 @@ func (p *Player) findIsle() []int {
 			return empty
 		}
 		fmt.Printf("Try mines (%d) simulations\n", p.mine)
-		ic := &IsleContext{player: p, mine: p.mine, isle: isle}
+		ic := &isleContext{player: p, mine: p.mine, isle: isle}
 		safe, err := ic.solve()
 		if err != nil {
 			fmt.Println("isle: ", err)
@@ -869,7 +871,7 @@ func (p *Player) findIsle() []int {
 	return empty
 }
 
-func (p *Player) isle() []int {
+func (p *player) isle() []int {
 	x, y := p.one(isUnknown)
 	visited := make(map[int]bool)
 	result := []int{}
@@ -877,7 +879,7 @@ func (p *Player) isle() []int {
 	return result
 }
 
-func (p *Player) isle0(x, y int, result *[]int, visited map[int]bool) {
+func (p *player) isle0(x, y int, result *[]int, visited map[int]bool) {
 	if y >= p.row || y < 0 || x < 0 || x >= p.col {
 		return
 	}
@@ -886,16 +888,16 @@ func (p *Player) isle0(x, y int, result *[]int, visited map[int]bool) {
 		return
 	}
 	visited[i] = true
-	if p.tiles[y][x].value == Unknown {
+	if p.tiles[y][x].value == tsUnknown {
 		*result = append(*result, i)
-		p.isle0(x - 1, y, result, visited)
-		p.isle0(x + 1, y, result, visited)
-		p.isle0(x, y - 1, result, visited)
-		p.isle0(x, y + 1, result, visited)
+		p.isle0(x-1, y, result, visited)
+		p.isle0(x+1, y, result, visited)
+		p.isle0(x, y-1, result, visited)
+		p.isle0(x, y+1, result, visited)
 	}
 }
 
-func (p *Player) one(filter func(*TileExt) bool) (int, int) {
+func (p *player) one(filter func(*tileExit) bool) (int, int) {
 	for y := range p.tiles {
 		for x := range p.tiles[y] {
 			if filter(&p.tiles[y][x]) {
@@ -906,7 +908,7 @@ func (p *Player) one(filter func(*TileExt) bool) (int, int) {
 	return -1, -1
 }
 
-func (p *Player) collect(filter func(*TileExt) bool) []int {
+func (p *player) collect(filter func(*tileExit) bool) []int {
 	res := []int{}
 	for y := range p.tiles {
 		for x := range p.tiles[y] {
@@ -918,7 +920,7 @@ func (p *Player) collect(filter func(*TileExt) bool) []int {
 	return res
 }
 
-func (p *Player) click(b *Board, x, y int) {
+func (p *player) click(b *board, x, y int) {
 	if y >= b.row || y < 0 || x < 0 || x >= b.col {
 		return
 	}
@@ -930,25 +932,25 @@ func (p *Player) click(b *Board, x, y int) {
 	p.tiles[y][x].value = int(t)
 	p.tiles[y][x].revealed = true
 	if t.isMine() {
-		p.tiles[y][x].value = Boom
-		b.status = Boom
+		p.tiles[y][x].value = tsBoom
+		b.status = tsBoom
 		fmt.Printf("boom at (%d, %d)\n", x, y)
 		return
 	}
 
 	if t == 0 {
-		p.click(b, x - 1, y)
-		p.click(b, x - 1, y - 1)
-		p.click(b, x + 1, y)
-		p.click(b, x + 1, y + 1)
-		p.click(b, x, y - 1)
-		p.click(b, x + 1, y - 1)
-		p.click(b, x, y + 1)
-		p.click(b, x - 1, y + 1)
+		p.click(b, x-1, y)
+		p.click(b, x-1, y-1)
+		p.click(b, x+1, y)
+		p.click(b, x+1, y+1)
+		p.click(b, x, y-1)
+		p.click(b, x+1, y-1)
+		p.click(b, x, y+1)
+		p.click(b, x-1, y+1)
 	}
 }
 
-func (p *Player) worthDump() bool {
+func (p *player) worthDump() bool {
 	if dumpPng == 0 {
 		return false
 	}
@@ -958,11 +960,11 @@ func (p *Player) worthDump() bool {
 	return p.sure >= 10
 }
 
-func (p *Player) dump(outpath string) {
+func (p *player) dump(outpath string) {
 	file, err := os.Create(outpath)
 	check(err)
 	defer file.Close()
-	width, height := 16 * p.col, 16 * p.row
+	width, height := 16*p.col, 16*p.row
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := range p.tiles {
 		for x, t := range p.tiles[y] {
@@ -970,12 +972,12 @@ func (p *Player) dump(outpath string) {
 			v := t.value
 			if v >= 0 && v <= 8 {
 				imgFile = fmt.Sprintf("%d.png", v)
-			} else if v == Boom {
+			} else if v == tsBoom {
 				imgFile = "bomb_red.png"
-			} else if v == Flag {
+			} else if v == tsFlag {
 				imgFile = "flag.png"
 			}
-			render(img, 16 * x, 16 * y, imgFile)
+			render(img, 16*x, 16*y, imgFile)
 		}
 	}
 	png.Encode(file, img)
