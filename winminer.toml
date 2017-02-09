@@ -1,4 +1,4 @@
-strategies = [ "diff", "reduce", "reduce", "isle" ]
+strategies = [ "diff", "reduce", "isle", "reverse"]
 
 [[levels]]
 row = 9
