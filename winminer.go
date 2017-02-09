@@ -659,7 +659,7 @@ func (p *player) findSafe() []int {
 		}
 	}
 
-	if len(safe) == 0 && p.mine > 0 {
+	if p.mine > 0 {
 		//as map iteration is random in golang
 		//try shooting for 10 times
 		for shoot := 0; shoot < 10; shoot++ {
@@ -669,10 +669,11 @@ func (p *player) findSafe() []int {
 				return safe
 			}
 		}
-		if len(safe) == 0 && p.mine < 5 {
+		if p.mine < 5 {
 			safe = p.findIsle()
 		}
 	}
+
 	return safe
 }
 
