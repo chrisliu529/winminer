@@ -15,26 +15,32 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/chrisliu529/gopl.io/ch6/intset"
 )
 
 type levelConfig struct {
-	row    int
-	column int
-	mine   int
+	Row    int
+	Column int
+	Mine   int
+}
+
+type tomlConfig struct {
+	Levels     []levelConfig
+	Strategies []string
 }
 
 var (
-	levelConfigs = []levelConfig{
-		{9, 9, 10},
-		{16, 16, 40},
-		{16, 30, 99},
-	}
+	config  tomlConfig
 	images  map[string]image.Image
 	dumpPng int
 )
 
 func main() {
+	if _, err := toml.DecodeFile("winminer.toml", &config); err != nil {
+		fmt.Println(err)
+		return
+	}
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	level := flag.Int("lv", 1, "game level (1-3)")
 	n := flag.Int("n", 1, "number of benchmark cases")
@@ -95,11 +101,11 @@ func printBenchCase(bc []int) {
 }
 
 func benchCase(level int, rng *rand.Rand) []int {
-	lc := levelConfigs[level-1]
-	row := lc.row
-	col := lc.column
+	lc := config.Levels[level-1]
+	row := lc.Row
+	col := lc.Column
 	tiles := row * col
-	mine := lc.mine
+	mine := lc.Mine
 	res := make([]int, mine)
 	mineCandidates := make([]int, tiles)
 	for i := 0; i < tiles; i++ {
@@ -135,8 +141,8 @@ func check(e error) {
 func runBench(filename string) {
 	var total int
 	var sure, guess, totalClicks int
-	wins := make([]int, len(levelConfigs))
-	loses := make([]int, len(levelConfigs))
+	wins := make([]int, len(config.Levels))
+	loses := make([]int, len(config.Levels))
 	text, err := ioutil.ReadFile(filename)
 	check(err)
 	lines := strings.Split(string(text), "\n")
@@ -275,8 +281,8 @@ func toIndex(x, y, column int) int {
 }
 
 func (b *board) initTiles() {
-	c := levelConfigs[b.level-1]
-	b.row, b.col, b.mine = c.row, c.column, c.mine
+	c := config.Levels[b.level-1]
+	b.row, b.col, b.mine = c.Row, c.Column, c.Mine
 	b.tiles = make([][]tileInt, b.row)
 	for i := range b.tiles {
 		t := make([]tileInt, b.col)
@@ -330,8 +336,8 @@ func (t *tileInt) isMine() bool {
 }
 
 func getLevel(n int) (level int, err error) {
-	for i := 0; i < len(levelConfigs); i++ {
-		if n == levelConfigs[i].mine {
+	for i := 0; i < len(config.Levels); i++ {
+		if n == config.Levels[i].Mine {
 			return i + 1, err
 		}
 	}
@@ -607,7 +613,7 @@ func (p *player) findSafe() []int {
 				}
 			}
 		}
-		if !needRefresh {
+		if strategyEnabled("diff") && !needRefresh {
 			fmt.Println("searching view directly found no safe tiles, start searching diff")
 			diff := make(map[*intset.IntSet]int)
 			for s, v := range p.view {
@@ -635,7 +641,7 @@ func (p *player) findSafe() []int {
 				p.view[k] = v
 			}
 		}
-		if !stateChanged {
+		if strategyEnabled("reduce") && !stateChanged {
 			fmt.Println("searching view diff made no state change, start searching reduce")
 			reduce := make(map[*intset.IntSet]int)
 			for s, v := range p.view {
@@ -660,17 +666,21 @@ func (p *player) findSafe() []int {
 	}
 
 	if p.mine > 0 {
-		//as map iteration is random in golang
-		//try shooting for 10 times
-		for shoot := 0; shoot < 10; shoot++ {
-			fmt.Printf("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
-			safe = p.findReverse()
-			if len(safe) > 0 {
-				return safe
+		if strategyEnabled("reverse") {
+			//as map iteration is random in golang
+			//try shooting for 10 times
+			for shoot := 0; shoot < 10; shoot++ {
+				fmt.Printf("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
+				safe = p.findReverse()
+				if len(safe) > 0 {
+					return safe
+				}
 			}
 		}
-		if p.mine < 5 {
-			safe = p.findIsle()
+		if strategyEnabled("isle") {
+			if p.mine < 5 {
+				safe = p.findIsle()
+			}
 		}
 	}
 
@@ -980,4 +990,13 @@ func (p *player) dump(outpath string) {
 		}
 	}
 	png.Encode(file, img)
+}
+
+func strategyEnabled(name string) bool {
+	for _, s := range config.Strategies {
+		if s == name {
+			return true
+		}
+	}
+	return false
 }
