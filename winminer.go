@@ -394,7 +394,6 @@ func (p *player) play(b *board) int {
 	}
 	for b.status == 0 {
 		if p.sure == 0 {
-			//always click the middle of board for the first step
 			clickF(initx, inity)
 			continue
 		}
@@ -585,6 +584,14 @@ func (p *player) findSafe() []int {
 		}
 		needRefresh = false
 		for s, v := range p.view {
+			if v == 0 {
+				for _, e := range s.Elems() {
+					if !inSlice(e, safe) {
+						safe = append(safe, e)
+					}
+				}
+				return safe
+			}
 			if v == s.Len() {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
@@ -598,15 +605,6 @@ func (p *player) findSafe() []int {
 						needRefresh = true
 					}
 				}
-			} else if v == 0 {
-				for _, e := range s.Elems() {
-					if !inSlice(e, safe) {
-						safe = append(safe, e)
-					}
-				}
-			}
-			if len(safe) > 0 {
-				return safe
 			}
 		}
 		if !needRefresh {
