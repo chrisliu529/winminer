@@ -28,12 +28,14 @@ type levelConfig struct {
 type tomlConfig struct {
 	Levels     []levelConfig
 	Strategies []string
+	Guess      string
 }
 
 var (
 	config  tomlConfig
 	images  map[string]image.Image
 	dumpPng int
+	rng     *rand.Rand
 )
 
 func main() {
@@ -41,6 +43,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	level := flag.Int("lv", 1, "game level (1-3)")
 	n := flag.Int("n", 1, "number of benchmark cases")
@@ -49,7 +52,7 @@ func main() {
 	d := flag.Int("d", 0, "dump board into .png file - 0: don't dump; 1: only dump worthy failures; 2: dump all")
 
 	flag.Parse()
-
+	rng = rand.New(rand.NewSource(int64(*s)))
 	dumpPng = *d
 	if *gb {
 		genBench(*n, *s, *level)
@@ -82,9 +85,8 @@ func loadImages() map[string]image.Image {
 }
 
 func genBench(n, s, level int) {
-	rng := rand.New(rand.NewSource(int64(s)))
 	for i := 0; i < n; i++ {
-		bc := benchCase(level, rng)
+		bc := benchCase(level)
 		sort.Ints(bc)
 		printBenchCase(bc)
 	}
@@ -100,7 +102,7 @@ func printBenchCase(bc []int) {
 	fmt.Print("\n")
 }
 
-func benchCase(level int, rng *rand.Rand) []int {
+func benchCase(level int) []int {
 	lc := config.Levels[level-1]
 	row := lc.Row
 	col := lc.Column
@@ -447,6 +449,20 @@ func sumSlice(s []int) int {
 }
 
 func (p *player) doGuess() (int, int) {
+	if config.Guess == "corner" {
+		return p.cornerGuess()
+	}
+	if config.Guess == "random" {
+		return p.randomGuess()
+	}
+	return p.firstGuess()
+}
+
+func (p *player) firstGuess() (int, int) {
+	return p.one(isUnknown)
+}
+
+func (p *player) cornerGuess() (int, int) {
 	corners := func() (int, int) {
 		if isUnknown(&p.tiles[0][0]) {
 			return 0, 0
@@ -501,6 +517,11 @@ func (p *player) doGuess() (int, int) {
 		x, y = methods[p.guess%4]()
 	}
 	return x, y
+}
+
+func (p *player) randomGuess() (int, int) {
+	u := p.collect(isUnknown)
+	return toXY(u[rng.Intn(len(u))], p.col)
 }
 
 func (p *player) refreshView() error {

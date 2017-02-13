@@ -1,5 +1,7 @@
 strategies = [ "diff", "reduce", "isle", "reverse"]
 
+guess = "corner"
+
 [[levels]]
 row = 9
 column = 9
