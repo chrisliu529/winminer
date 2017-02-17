@@ -29,6 +29,7 @@ type tomlConfig struct {
 	Levels     []levelConfig
 	Strategies []string
 	Guess      string
+	Verbose    bool
 }
 
 var (
@@ -140,6 +141,12 @@ func check(e error) {
 	}
 }
 
+func verboseLog(format string, args ...interface{}) {
+	if config.Verbose {
+		fmt.Printf(format, args...)
+	}
+}
+
 func runBench(filename string) {
 	var total int
 	var sure, guess, totalClicks int
@@ -154,7 +161,7 @@ func runBench(filename string) {
 			//ignore empty lines
 			total++
 			board := initBoard(toInt(mines))
-			fmt.Println(board)
+			verboseLog("%v\n", board)
 			if dumpPng == 2 {
 				board.dump(fmt.Sprintf("%d.png", i))
 			}
@@ -201,7 +208,7 @@ const (
 )
 
 func initBoard(mines []int) *board {
-	fmt.Println("init board with ", mines, len(mines))
+	verboseLog("init board with %v %v\n", mines, len(mines))
 	level, err := getLevel(len(mines))
 	check(err)
 	b := &board{level: level, status: 0}
@@ -372,7 +379,7 @@ type player struct {
 }
 
 func initPlayer(b *board, i int) *player {
-	fmt.Println("init player with level ", b.level)
+	verboseLog("init player with level %d\n", b.level)
 	p := &player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level, i)}
 	p.init(b)
 	return p
@@ -411,9 +418,9 @@ func (p *player) play(b *board) int {
 			break
 		}
 		if len(safe) == 0 {
-			fmt.Println("now we have to guess...")
+			verboseLog("now we have to guess...\n")
 			x, y := p.doGuess()
-			fmt.Printf("guess at (%d, %d)\n", x, y)
+			verboseLog("guess at (%d, %d)\n", x, y)
 			p.guess++
 			p.click(b, x, y)
 			step++
@@ -424,10 +431,10 @@ func (p *player) play(b *board) int {
 		}
 	}
 	if b.status == tsWin {
-		fmt.Println("Win!")
+		verboseLog("Win!\n")
 		return tsWin
 	}
-	fmt.Println("Lost!")
+	verboseLog("Lost!\n")
 	return tsLose
 }
 
@@ -622,7 +629,7 @@ func (p *player) findSafe() []int {
 			if v == s.Len() {
 				for _, e := range s.Elems() {
 					x, y := toXY(e, p.col)
-					fmt.Println(x, y, p.tiles[y][x].value)
+					verboseLog("%d %d %d\n", x, y, p.tiles[y][x].value)
 					if p.tiles[y][x].value != tsFlag {
 						p.tiles[y][x].value = tsFlag
 						p.mine--
@@ -635,7 +642,7 @@ func (p *player) findSafe() []int {
 			}
 		}
 		if strategyEnabled("diff") && !needRefresh {
-			fmt.Println("searching view directly found no safe tiles, start searching diff")
+			verboseLog("searching view directly found no safe tiles, start searching diff\n")
 			diff := make(map[*intset.IntSet]int)
 			for s, v := range p.view {
 				if v > 0 {
@@ -663,7 +670,7 @@ func (p *player) findSafe() []int {
 			}
 		}
 		if strategyEnabled("reduce") && !stateChanged {
-			fmt.Println("searching view diff made no state change, start searching reduce")
+			verboseLog("searching view diff made no state change, start searching reduce\n")
 			reduce := make(map[*intset.IntSet]int)
 			for s, v := range p.view {
 				if v > 1 {
@@ -691,7 +698,7 @@ func (p *player) findSafe() []int {
 			//as map iteration is random in golang
 			//try shooting for 10 times
 			for shoot := 0; shoot < 10; shoot++ {
-				fmt.Printf("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
+				verboseLog("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
 				safe = p.findReverse()
 				if len(safe) > 0 {
 					return safe
@@ -752,7 +759,7 @@ to work around the map keys equal issue
 func (p *player) viewKey(s *intset.IntSet) *intset.IntSet {
 	for s2 := range p.view {
 		if s.String() == s2.String() {
-			fmt.Println("view key found", s2)
+			verboseLog("view key found %v\n", s2)
 			return s2
 		}
 	}
@@ -836,7 +843,7 @@ func (p *player) isConsistent() bool {
 		x, y := toXY(n, p.col)
 		nf := p.neighbors(x, y, isFlag)
 		if p.tiles[y][x].value != nf {
-			fmt.Printf("inconsistency detected (%d, %d) = %d (!=%d)\n", x, y, p.tiles[y][x].value, nf)
+			verboseLog("inconsistency detected (%d, %d) = %d (!=%d)\n", x, y, p.tiles[y][x].value, nf)
 			return false
 		}
 	}
@@ -879,21 +886,21 @@ func (p *player) neighbors(x, y int, filter func(*tileExit) bool) int {
 }
 
 func (p *player) findIsle() []int {
-	fmt.Printf("remained mines=%d, locating the isle\n", p.mine)
+	verboseLog("remained mines=%d, locating the isle\n", p.mine)
 	empty := []int{}
 	isle := p.isle()
 	us := p.collect(isUnknown)
 	if len(us) == len(isle) {
-		fmt.Printf("isle located: %v.\n", isle)
+		verboseLog("isle located: %v.\n", isle)
 		if len(isle) > 10 {
-			fmt.Println("isle too large. giving up")
+			verboseLog("isle too large. giving up\n")
 			return empty
 		}
-		fmt.Printf("Try mines (%d) simulations\n", p.mine)
+		verboseLog("Try mines (%d) simulations\n", p.mine)
 		ic := &isleContext{player: p, mine: p.mine, isle: isle}
 		safe, err := ic.solve()
 		if err != nil {
-			fmt.Println("isle: ", err)
+			verboseLog("isle: %v\n", err)
 			return empty
 		}
 		return safe
@@ -957,14 +964,14 @@ func (p *player) click(b *board, x, y int) {
 	if p.tiles[y][x].revealed {
 		return
 	}
-	fmt.Printf("click at (%d, %d)\n", x, y)
+	verboseLog("click at (%d, %d)\n", x, y)
 	t := b.tiles[y][x]
 	p.tiles[y][x].value = int(t)
 	p.tiles[y][x].revealed = true
 	if t.isMine() {
 		p.tiles[y][x].value = tsBoom
 		b.status = tsBoom
-		fmt.Printf("boom at (%d, %d)\n", x, y)
+		verboseLog("boom at (%d, %d)\n", x, y)
 		return
 	}
 

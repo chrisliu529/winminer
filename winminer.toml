@@ -2,6 +2,8 @@ strategies = [ "diff", "reduce", "isle", "reverse"]
 
 guess = "corner"
 
+#verbose = true
+
 [[levels]]
 row = 9
 column = 9
