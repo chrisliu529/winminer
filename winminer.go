@@ -117,10 +117,11 @@ func benchCase(level int) []int {
 	initClick := toIndex(initx, inity, col)
 	for i := 0; i < mine; {
 		mineTile := rng.Intn(len(mineCandidates))
+		/* According to winmine game implementation,
+		the board will be re-shuffled if the first click is a mine.
+		So we fix the first click and never put a mine on it.
+		*/
 		if mineCandidates[mineTile] == initClick {
-			/* According to winmine game implementation, the board will be re-shuffled when first click on a mine.
-			* We simply fix the first click by avoiding putting a mine on it.
-			 */
 			continue
 		}
 		res[i] = mineCandidates[mineTile]
@@ -147,9 +148,14 @@ func verboseLog(format string, args ...interface{}) {
 	}
 }
 
+const (
+	dumpNone = iota
+	dumpWorthyFailure
+	dumpAll
+)
+
 func runBench(filename string) {
-	var total int
-	var sure, guess, totalClicks int
+	var total, sure, guess, totalClicks int
 	wins := make([]int, len(config.Levels))
 	loses := make([]int, len(config.Levels))
 	text, err := ioutil.ReadFile(filename)
@@ -157,12 +163,12 @@ func runBench(filename string) {
 	lines := strings.Split(string(text), "\n")
 	for i := range lines {
 		mines := strings.Split(lines[i], ",")
+		//ignore empty lines
 		if len(mines) > 1 {
-			//ignore empty lines
 			total++
 			board := initBoard(toInt(mines))
 			verboseLog("%v\n", board)
-			if dumpPng == 2 {
+			if dumpPng == dumpAll {
 				board.dump(fmt.Sprintf("%d.png", i))
 			}
 			player := initPlayer(board, i)
@@ -988,10 +994,10 @@ func (p *player) click(b *board, x, y int) {
 }
 
 func (p *player) worthDump() bool {
-	if dumpPng == 0 {
+	if dumpPng == dumpNone {
 		return false
 	}
-	if dumpPng == 2 {
+	if dumpPng == dumpAll {
 		return true
 	}
 	return p.sure >= 10
