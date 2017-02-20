@@ -25,11 +25,17 @@ type levelConfig struct {
 	Mine   int
 }
 
+type isleConf struct {
+	MaxMine int
+	MaxSize int
+}
+
 type tomlConfig struct {
 	Levels     []levelConfig
 	Strategies []string
 	Guess      string
 	Verbose    bool
+	Isle       isleConf
 }
 
 var (
@@ -176,7 +182,7 @@ func runBench(filename string) {
 			if res == tsWin {
 				wins[board.level-1]++
 			} else {
-				if player.worthDump() {
+				if dumpPng >= dumpWorthyFailure && player.worthDump() {
 					player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				}
 				loses[board.level-1]++
@@ -712,8 +718,10 @@ func (p *player) findSafe() []int {
 			}
 		}
 		if strategyEnabled("isle") {
-			if p.mine < 5 {
+			if p.mine < config.Isle.MaxMine {
 				safe = p.findIsle()
+			} else {
+				verboseLog("remained %d mines, skip isle analysis\n", p.mine)
 			}
 		}
 	}
@@ -898,7 +906,7 @@ func (p *player) findIsle() []int {
 	us := p.collect(isUnknown)
 	if len(us) == len(isle) {
 		verboseLog("isle located: %v.\n", isle)
-		if len(isle) > 10 {
+		if len(isle) > config.Isle.MaxSize {
 			verboseLog("isle too large. giving up\n")
 			return empty
 		}
@@ -994,12 +1002,6 @@ func (p *player) click(b *board, x, y int) {
 }
 
 func (p *player) worthDump() bool {
-	if dumpPng == dumpNone {
-		return false
-	}
-	if dumpPng == dumpAll {
-		return true
-	}
 	return p.sure >= 10
 }
 

@@ -18,3 +18,7 @@ mine = 40
 row = 16
 column = 30
 mine = 99
+
+[isle]
+maxMine = 5
+maxSize = 10
