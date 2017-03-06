@@ -902,10 +902,11 @@ func (p *player) neighbors(x, y int, filter func(*tileExit) bool) int {
 func (p *player) findIsle() []int {
 	verboseLog("remained mines=%d, locating the isle\n", p.mine)
 	empty := []int{}
-	isle := p.isle()
+	x, y := p.one(isUnknown)
+	isle := p.isleAt(x, y)
 	us := p.collect(isUnknown)
 	if len(us) == len(isle) {
-		verboseLog("isle located: %v.\n", isle)
+		verboseLog("only one isle located: %v.\n", isle)
 		if len(isle) > config.Isle.MaxSize {
 			verboseLog("isle too large. giving up\n")
 			return empty
@@ -922,8 +923,7 @@ func (p *player) findIsle() []int {
 	return empty
 }
 
-func (p *player) isle() []int {
-	x, y := p.one(isUnknown)
+func (p *player) isleAt(x, y int) []int {
 	visited := make(map[int]bool)
 	result := []int{}
 	p.isle0(x, y, &result, visited)
