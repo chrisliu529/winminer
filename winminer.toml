@@ -1,4 +1,4 @@
-strategies = [ "diff", "reduce", "isle", "reverse"]
+strategies = ['diff', 'reduce', 'isle']
 
 guess = "corner"
 

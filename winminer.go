@@ -706,17 +706,6 @@ func (p *player) findSafe() []int {
 	}
 
 	if p.mine > 0 {
-		if strategyEnabled("reverse") {
-			//as map iteration is random in golang
-			//try shooting for 10 times
-			for shoot := 0; shoot < 10; shoot++ {
-				verboseLog("#%d try searching by counting down remained %d mines\n", shoot, p.mine)
-				safe = p.findReverse()
-				if len(safe) > 0 {
-					return safe
-				}
-			}
-		}
 		if strategyEnabled("isle") {
 			if p.mine < config.Isle.MaxMine {
 				safe = p.findIsle()
@@ -726,41 +715,6 @@ func (p *player) findSafe() []int {
 		}
 	}
 
-	return safe
-}
-
-func (p *player) findReverse() []int {
-	safe := []int{}
-	us := p.collect(isUnknown)
-	visited := make(map[int]bool)
-	for _, e := range us {
-		visited[e] = false
-	}
-	m := p.mine
-	for s, v := range p.view {
-		toReduce := true
-		for _, e := range s.Elems() {
-			if visited[e] {
-				toReduce = false
-				break
-			}
-			visited[e] = true
-		}
-		if toReduce {
-			m -= v
-			if m < 0 {
-				panic("internal error")
-			}
-			if m == 0 {
-				for k := range visited {
-					if !visited[k] {
-						safe = append(safe, k)
-					}
-				}
-				return safe
-			}
-		}
-	}
 	return safe
 }
 
