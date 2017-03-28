@@ -4,6 +4,15 @@ import subprocess
 import sys
 import re
 import time
+from string import Template
+from optparse import OptionParser
+
+parser = OptionParser()
+parser.add_option("-c", "--combinations",
+                  action="store_true", dest="bench_combinations", default=False,
+                  help="run benchmarks with config combinations")
+
+(options, args) = parser.parse_args()
 
 def get_output(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -30,10 +39,27 @@ def bench():
     ws = wins(out)
     si = score(ws)
     print 'score=%s %s %s' % (si, ws, ratio(ws))
-    if len(sys.argv) == 1:
+    if len(args) < 1:
         return
-    if si > int(sys.argv[1]):
-        sys.exit(0)
-    sys.exit(1)
+    if si < int(args[0]):
+        sys.exit(1)
 
-bench()
+def gen_config(s, g):
+    t = Template(file('template.toml').read())
+    print 'genreate config with stratege = %s, guess = %s' % (s, g)
+    f = open('winminer.toml', 'w')
+    f.write(t.substitute(strategies=s, guess=g))
+    f.close()
+
+def bench_combinations():
+    strategies=["diff", "reduce", "isle"]
+    gs=["random", "corner"]
+    for i in range(len(strategies)):
+        for j in range(len(gs)):
+            gen_config(strategies[:i+1], gs[j])
+            bench()
+
+if options.bench_combinations:
+    bench_combinations()
+else:
+    bench()

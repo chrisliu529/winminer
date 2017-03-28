@@ -1,0 +1,24 @@
+strategies = $strategies
+
+guess = "$guess"
+
+#verbose = true
+
+[[levels]]
+row = 9
+column = 9
+mine = 10
+
+[[levels]]
+row = 16
+column = 16
+mine = 40
+
+[[levels]]
+row = 16
+column = 30
+mine = 99
+
+[isle]
+maxMine = 5
+maxSize = 10
