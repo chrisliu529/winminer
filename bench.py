@@ -35,10 +35,10 @@ def ratio(w):
 def bench():
     t = time.time()
     out = get_output("./winminer | grep win:")
-    print 'Finish benchmark in %.2f seconds' % (time.time() - t)
+    ct = time.time() - t
     ws = wins(out)
     si = score(ws)
-    print 'score=%s %s %s' % (si, ws, ratio(ws))
+    print 'score=%s %s %s, cost %.2f seconds' % (si, ws, ratio(ws), ct)
     if len(args) < 1:
         return
     if si < int(args[0]):
@@ -46,14 +46,14 @@ def bench():
 
 def gen_config(s, g):
     t = Template(file('template.toml').read())
-    print 'genreate config with stratege = %s, guess = %s' % (s, g)
+    print 'strategies = %s, guess = %s' % (s, g)
     f = open('winminer.toml', 'w')
     f.write(t.substitute(strategies=s, guess=g))
     f.close()
 
 def bench_combinations():
     strategies=["diff", "reduce", "isle"]
-    gs=["random", "corner"]
+    gs=["first", "random", "corner"]
     for i in range(len(strategies)):
         for j in range(len(gs)):
             gen_config(strategies[:i+1], gs[j])
