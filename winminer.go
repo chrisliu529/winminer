@@ -388,6 +388,7 @@ type player struct {
 	col      int
 	mine     int
 	gamename string
+	guesser  func() (int, int)
 }
 
 func initPlayer(b *board, i int) *player {
@@ -468,13 +469,23 @@ func sumSlice(s []int) int {
 }
 
 func (p *player) doGuess() (int, int) {
-	if config.Guess == "corner" {
-		return p.cornerGuess()
+	if p.guesser != nil {
+		return p.guesser()
 	}
-	if config.Guess == "random" {
-		return p.randomGuess()
+	m := map[string]func() (int, int){
+		"first":  p.firstGuess,
+		"random": p.randomGuess,
+		"corner": p.cornerGuess,
+		"min":    p.minGuess,
 	}
-	return p.firstGuess()
+	if g, found := m[config.Guess]; found {
+		p.guesser = g
+	}
+	return p.guesser()
+}
+
+func (p *player) minGuess() (int, int) {
+	return p.one(isUnknown)
 }
 
 func (p *player) firstGuess() (int, int) {
