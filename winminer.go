@@ -39,10 +39,13 @@ type tomlConfig struct {
 }
 
 var (
-	config  tomlConfig
-	images  map[string]image.Image
-	dumpPng int
-	rng     *rand.Rand
+	config       tomlConfig
+	images       map[string]image.Image
+	dumpPng      int
+	rng          *rand.Rand
+	dumpText     bool
+	successCases *os.File
+	failedCases  *os.File
 )
 
 func main() {
@@ -52,6 +55,8 @@ func main() {
 	}
 
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
+	dt := flag.Bool("dt", false, "dump text of cases or not")
+	dtFile := flag.String("dt-file", "", "file name prefix for dumping cases")
 	level := flag.Int("lv", 1, "game level (1-3)")
 	n := flag.Int("n", 1, "number of benchmark cases")
 	s := flag.Int("s", 0, "random seed for generating benchmark cases")
@@ -60,12 +65,18 @@ func main() {
 
 	flag.Parse()
 	rng = rand.New(rand.NewSource(int64(*s)))
-	dumpPng = *d
 	if *gb {
 		genBench(*n, *s, *level)
 	} else {
+		dumpPng = *d
 		if dumpPng > 0 {
 			images = loadImages()
+		}
+		dumpText = *dt
+		if dumpText {
+			prefix := *dtFile
+			successCases, _ = os.Create(prefix + "_success.txt")
+			failedCases, _ = os.Create(prefix + "_failed.txt")
 		}
 		runBench(*f)
 	}
@@ -173,6 +184,7 @@ func runBench(filename string) {
 		if len(mines) > 1 {
 			total++
 			board := initBoard(toInt(mines))
+			board.text = lines[i]
 			verboseLog("%v\n", board)
 			if dumpPng == dumpAll {
 				board.dump(fmt.Sprintf("%d.png", i))
@@ -181,11 +193,13 @@ func runBench(filename string) {
 			res := player.play(board)
 			if res == tsWin {
 				wins[board.level-1]++
+				successCases.WriteString(lines[i] + "\n")
 			} else {
 				if dumpPng >= dumpWorthyFailure && player.worthDump() {
 					player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				}
 				loses[board.level-1]++
+				failedCases.WriteString(lines[i] + "\n")
 			}
 			sure += player.sure
 			guess += player.guess
@@ -212,6 +226,7 @@ type board struct {
 	col    int
 	mine   int
 	status int
+	text   string
 }
 
 const (
