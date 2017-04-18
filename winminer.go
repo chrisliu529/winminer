@@ -430,6 +430,10 @@ func (p *player) play(b *board) int {
 	step := 0
 	clickF := func(x, y int) {
 		if p.tiles[y][x].value == tsUnknown {
+			verboseLog("### step %d ###\n", step)
+			if dumpPng == dumpAll {
+				p.dump(fmt.Sprintf("f%s-%d.png", p.gamename, step))
+			}
 			p.sure++
 			p.click(b, x, y)
 			step++
