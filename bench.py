@@ -56,7 +56,7 @@ def gen_config(s, g):
 
 def bench_combinations():
     strategies=["diff", "reduce", "isle"]
-    gs=["first", "random", "corner"]
+    gs=["first", "random", "corner", "min"]
     for i in range(len(strategies)):
         for j in range(len(gs)):
             gen_config(strategies[:i+1], gs[j])

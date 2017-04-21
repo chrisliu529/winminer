@@ -434,7 +434,6 @@ func (p *player) play(b *board) int {
 			if dumpPng == dumpAll {
 				p.dump(fmt.Sprintf("f%s-%d.png", p.gamename, step))
 			}
-			p.sure++
 			p.click(b, x, y)
 			step++
 		}
@@ -442,6 +441,7 @@ func (p *player) play(b *board) int {
 	for b.status == 0 {
 		if p.sure == 0 {
 			clickF(initx, inity)
+			p.sure++
 			continue
 		}
 		safe := p.findSafe()
@@ -453,17 +453,20 @@ func (p *player) play(b *board) int {
 			verboseLog("now we have to guess...\n")
 			x, y := p.doGuess()
 			verboseLog("guess at (%d, %d)\n", x, y)
+			clickF(x, y)
 			p.guess++
-			p.click(b, x, y)
-			step++
 			continue
 		}
 		for _, v := range safe {
 			clickF(toXY(v, p.col))
+			p.sure++
 		}
 	}
 	if b.status == tsWin {
 		verboseLog("Win!\n")
+		if dumpPng == dumpAll {
+			p.dump(fmt.Sprintf("f%s-%d.png", p.gamename, step))
+		}
 		return tsWin
 	}
 	verboseLog("Lost!\n")
@@ -487,7 +490,29 @@ func sumSlice(s []int) int {
 	return res
 }
 
+func (p *player) corners() (int, int) {
+	if isUnknown(&p.tiles[0][0]) {
+		return 0, 0
+	}
+	if isUnknown(&p.tiles[p.row-1][p.col-1]) {
+		return p.col - 1, p.row - 1
+	}
+	if isUnknown(&p.tiles[p.row-1][0]) {
+		return 0, p.row - 1
+	}
+	if isUnknown(&p.tiles[0][p.col-1]) {
+		return p.col - 1, 0
+	}
+	return -1, -1
+}
+
 func (p *player) doGuess() (int, int) {
+	//prefer unknown corners
+	x, y := p.corners()
+	if x >= 0 {
+		return x, y
+	}
+
 	if p.guesser != nil {
 		return p.guesser()
 	}
@@ -504,7 +529,47 @@ func (p *player) doGuess() (int, int) {
 }
 
 func (p *player) minGuess() (int, int) {
-	return p.one(isUnknown)
+	pm := make(map[int]float64)
+	for s, v := range p.view {
+		if v > 0 {
+			sz := s.Len()
+			for _, e := range s.Elems() {
+				x, y := toXY(e, p.col)
+				if !isUnknown(&p.tiles[y][x]) {
+					log.Fatal(fmt.Sprintf("unexpected known tile: %d, %d, %v", x, y, p.tiles[y][x]))
+				}
+				prob := float64(v) / float64(sz)
+				if pv, found := pm[e]; found {
+					//prefer the more risky data
+					if pv < prob {
+						pm[e] = prob
+					}
+				} else {
+					//only accept tiles which are not too risky and worthy to guess
+					if prob < 0.35 {
+						pm[e] = prob
+					}
+				}
+			}
+		}
+	}
+
+	min := 1.0
+	res := -1
+	for e, v := range pm {
+		verboseLog("P(%d) = %f\n", e, v)
+		if v < min {
+			min = v
+			res = e
+		}
+	}
+	if res >= 0 {
+		return toXY(res, p.col)
+	}
+
+	//no tile with low probility is found
+	//choose the first unknown
+	return p.firstGuess()
 }
 
 func (p *player) firstGuess() (int, int) {
@@ -512,21 +577,6 @@ func (p *player) firstGuess() (int, int) {
 }
 
 func (p *player) cornerGuess() (int, int) {
-	corners := func() (int, int) {
-		if isUnknown(&p.tiles[0][0]) {
-			return 0, 0
-		}
-		if isUnknown(&p.tiles[p.row-1][p.col-1]) {
-			return p.col - 1, p.row - 1
-		}
-		if isUnknown(&p.tiles[p.row-1][0]) {
-			return 0, p.row - 1
-		}
-		if isUnknown(&p.tiles[0][p.col-1]) {
-			return p.col - 1, 0
-		}
-		return -1, -1
-	}
 	leftUpper := func() (int, int) {
 		return p.one(isUnknown)
 	}
@@ -561,11 +611,7 @@ func (p *player) cornerGuess() (int, int) {
 		return -1, -1
 	}
 	methods := []func() (int, int){leftUpper, rightBottom, leftBottom, rightUpper}
-	x, y := corners()
-	if x < 0 {
-		x, y = methods[p.guess%4]()
-	}
-	return x, y
+	return methods[p.guess%4]()
 }
 
 func (p *player) randomGuess() (int, int) {

@@ -1,6 +1,6 @@
 strategies = ['diff', 'reduce', 'isle']
 
-guess = "corner"
+guess = "min"
 
 #verbose = true
 
