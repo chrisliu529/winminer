@@ -230,8 +230,8 @@ type board struct {
 }
 
 const (
-	initx = 5
-	inity = 5
+	initx = 0
+	inity = 0
 )
 
 func initBoard(mines []int) *board {
