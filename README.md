@@ -10,9 +10,11 @@ A new version (master branch) is a rewrite in golang to focus on the AI improvem
 
 ## Benchmark
 
-| Level | Beginner | Intermediate | Expert |
-|-------|:--------:|:--------------:|:--------:|
-| Win   |    91%   |      74%     |   28%  |
+| Level | Win | 
+|-------|:--------:|
+| Beginner   |    91%   |
+| Intermediate |       74%     |
+| Expert |   28%  |
 
 ### How to Run Benchmark
 
