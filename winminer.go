@@ -34,8 +34,14 @@ type tomlConfig struct {
 	Levels     []levelConfig
 	Strategies []string
 	Guess      string
+	Accept     float64
 	Verbose    bool
 	Isle       isleConf
+}
+
+type stats struct {
+	success int
+	failure int
 }
 
 var (
@@ -171,12 +177,22 @@ const (
 	dumpAll
 )
 
+func newGstats() map[string]*stats {
+	res := make(map[string]*stats)
+	m := []string{"first", "random", "corner", "min", "isle"}
+	for _, e := range m {
+		res[e] = &stats{success: 0, failure: 0}
+	}
+	return res
+}
+
 func runBench(filename string) {
 	var total, sure, guess, totalClicks int
 	wins := make([]int, len(config.Levels))
 	loses := make([]int, len(config.Levels))
 	text, err := ioutil.ReadFile(filename)
 	check(err)
+	gstats := newGstats()
 	lines := strings.Split(string(text), "\n")
 	for i := range lines {
 		mines := strings.Split(lines[i], ",")
@@ -204,6 +220,10 @@ func runBench(filename string) {
 			sure += player.sure
 			guess += player.guess
 			totalClicks += (player.sure + player.guess)
+			for k, v := range player.guessStats {
+				gstats[k].success += v.success
+				gstats[k].failure += v.failure
+			}
 		}
 	}
 	win := sumSlice(wins)
@@ -216,6 +236,10 @@ func runBench(filename string) {
 		float64(sure)/float64(totalClicks),
 		guess,
 		float64(guess)/float64(totalClicks))
+	for k, v := range gstats {
+		fmt.Printf("%s: success = %d\n", k, v.success)
+		fmt.Printf("%s: failure = %d\n", k, v.failure)
+	}
 }
 
 type tileInt int
@@ -395,20 +419,26 @@ const (
 )
 
 type player struct {
-	tiles    [][]tileExit
-	view     map[*intset.IntSet]int
-	sure     int
-	guess    int
-	row      int
-	col      int
-	mine     int
-	gamename string
-	guesser  func() (int, int)
+	tiles      [][]tileExit
+	view       map[*intset.IntSet]int
+	sure       int
+	guess      int
+	row        int
+	col        int
+	mine       int
+	gamename   string
+	guesser    func() (int, int)
+	guessed    string
+	guessStats map[string]*stats
 }
 
 func initPlayer(b *board, i int) *player {
 	verboseLog("init player with level %d\n", b.level)
-	p := &player{sure: 0, guess: 0, gamename: fmt.Sprintf("%d-%d", b.level, i)}
+	p := &player{
+		sure:     0,
+		guess:    0,
+		gamename: fmt.Sprintf("%d-%d", b.level, i),
+		guessed:  "none"}
 	p.init(b)
 	return p
 }
@@ -424,6 +454,8 @@ func (p *player) init(b *board) {
 		}
 		p.tiles[i] = t
 	}
+
+	p.guessStats = newGstats()
 }
 
 func (p *player) play(b *board) int {
@@ -439,6 +471,10 @@ func (p *player) play(b *board) int {
 		}
 	}
 	for b.status == 0 {
+		if p.guessed != "none" {
+			p.guessStats[p.guessed].success++
+			p.guessed = "none"
+		}
 		if p.sure == 0 {
 			clickF(initx, inity)
 			p.sure++
@@ -449,6 +485,14 @@ func (p *player) play(b *board) int {
 			b.status = tsWin
 			break
 		}
+		for _, v := range safe {
+			clickF(toXY(v, p.col))
+			if p.guessed == "none" {
+				p.sure++
+			} else {
+				p.guess++
+			}
+		}
 		if len(safe) == 0 {
 			verboseLog("now we have to guess...\n")
 			x, y := p.doGuess()
@@ -456,10 +500,6 @@ func (p *player) play(b *board) int {
 			clickF(x, y)
 			p.guess++
 			continue
-		}
-		for _, v := range safe {
-			clickF(toXY(v, p.col))
-			p.sure++
 		}
 	}
 	if b.status == tsWin {
@@ -469,6 +509,7 @@ func (p *player) play(b *board) int {
 		}
 		return tsWin
 	}
+	p.guessStats[p.guessed].failure++
 	verboseLog("Lost!\n")
 	return tsLose
 }
@@ -510,9 +551,11 @@ func (p *player) doGuess() (int, int) {
 	//prefer unknown corners
 	x, y := p.corners()
 	if x >= 0 {
+		p.guessed = "corner"
 		return x, y
 	}
 
+	p.guessed = config.Guess
 	if p.guesser != nil {
 		return p.guesser()
 	}
@@ -546,7 +589,7 @@ func (p *player) minGuess() (int, int) {
 					}
 				} else {
 					//only accept tiles which are not too risky and worthy to guess
-					if prob < 0.35 {
+					if prob < config.Accept {
 						pm[e] = prob
 					}
 				}
@@ -557,22 +600,23 @@ func (p *player) minGuess() (int, int) {
 	min := 1.0
 	res := -1
 	for e, v := range pm {
-		verboseLog("P(%d) = %f\n", e, v)
 		if v < min {
 			min = v
 			res = e
 		}
 	}
 	if res >= 0 {
+		verboseLog("Pmin = %f\n", min)
+		p.guessed = "min"
 		return toXY(res, p.col)
 	}
 
 	//no tile with low probility is found
-	//choose the first unknown
-	return p.firstGuess()
+	return p.cornerGuess()
 }
 
 func (p *player) firstGuess() (int, int) {
+	p.guessed = "first"
 	return p.one(isUnknown)
 }
 
@@ -611,10 +655,12 @@ func (p *player) cornerGuess() (int, int) {
 		return -1, -1
 	}
 	methods := []func() (int, int){leftUpper, rightBottom, leftBottom, rightUpper}
+	p.guessed = "corner"
 	return methods[p.guess%4]()
 }
 
 func (p *player) randomGuess() (int, int) {
+	p.guessed = "random"
 	u := p.collect(isUnknown)
 	return toXY(u[rng.Intn(len(u))], p.col)
 }
@@ -803,7 +849,6 @@ to work around the map keys equal issue
 func (p *player) viewKey(s *intset.IntSet) *intset.IntSet {
 	for s2 := range p.view {
 		if s.String() == s2.String() {
-			verboseLog("view key found %v\n", s2)
 			return s2
 		}
 	}
@@ -838,6 +883,7 @@ func combinations(n, m int, f func([]int)) {
 
 func (ic *isleContext) solve() ([]int, error) {
 	solutions := []*intset.IntSet{}
+	solMines := []*intset.IntSet{}
 	combinations(len(ic.isle), ic.mine,
 		func(s []int) {
 			for _, e := range s {
@@ -853,6 +899,9 @@ func (ic *isleContext) solve() ([]int, error) {
 				for i, e := range s {
 					ic.mines[i] = ic.isle[e]
 				}
+				var y intset.IntSet
+				y.AddAll(ic.mines...)
+				solMines = append(solMines, &y)
 			}
 			for _, e := range s {
 				x, y := toXY(ic.isle[e], ic.player.col)
@@ -870,15 +919,34 @@ func (ic *isleContext) solve() ([]int, error) {
 		}
 		return ic.safe, nil
 	}
-	// If all possible solutions share the same safe tiles, they must be safe
-	s0 := solutions[0].Copy()
-	for _, s := range solutions {
-		s0.IntersectWith(s)
+
+	bs := map[int]int{}
+	for _, t := range ic.isle {
+		bs[t] = 0
 	}
-	if s0.Len() > 0 {
-		return s0.Elems(), nil
+	for _, s := range solMines {
+		for _, e := range s.Elems() {
+			bs[e]++
+		}
 	}
-	return nil, errors.New("found multiple solutions but none sure safe")
+	safest := -1
+	vmin := 1000000
+	for k, v := range bs {
+		if v < vmin {
+			vmin = v
+			safest = k
+		}
+	}
+	if vmin == 0 {
+		return []int{safest}, nil
+	}
+	prob := float64(vmin) / float64(len(solutions))
+	if prob < config.Accept {
+		verboseLog("PSmin = %f\n", prob)
+		ic.player.guessed = "isle"
+		return []int{safest}, errors.New("found multiple solutions, guessed the safest one")
+	}
+	return nil, errors.New("found multiple solutions")
 }
 
 func (p *player) isConsistent() bool {
@@ -887,7 +955,6 @@ func (p *player) isConsistent() bool {
 		x, y := toXY(n, p.col)
 		nf := p.neighbors(x, y, isFlag)
 		if p.tiles[y][x].value != nf {
-			verboseLog("inconsistency detected (%d, %d) = %d (!=%d)\n", x, y, p.tiles[y][x].value, nf)
 			return false
 		}
 	}
@@ -946,7 +1013,9 @@ func (p *player) findIsle() []int {
 		safe, err := ic.solve()
 		if err != nil {
 			verboseLog("isle: %v\n", err)
-			return empty
+			if safe == nil {
+				return empty
+			}
 		}
 		return safe
 	}

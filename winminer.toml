@@ -4,6 +4,8 @@ guess = "min"
 
 #verbose = true
 
+accept = 0.4
+
 [[levels]]
 row = 9
 column = 9
@@ -20,5 +22,5 @@ column = 30
 mine = 99
 
 [isle]
-maxMine = 5
-maxSize = 10
+maxMine = 9
+maxSize = 19
