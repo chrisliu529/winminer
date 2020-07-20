@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import subprocess
 import sys
@@ -21,8 +21,8 @@ def get_output(cmd):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     out, err = p.communicate()
     if p.returncode != 0:
-        print out
-        print err
+        print(out)
+        print(err)
         sys.exit(p.returncode)
     return out.rstrip() #remove '\n' in the end
 
@@ -39,17 +39,18 @@ def bench():
     t = time.time()
     out = get_output("./winminer | grep win:")
     ct = time.time() - t
-    ws = wins(out)
+    ws = wins(out.decode('utf-8'))
     si = score(ws)
-    print 'score=%s %s %s, cost %.2f seconds' % (si, ws, ratio(ws), ct)
+    print('score=%s %s %s, cost %.2f seconds' % (si, ws, ratio(ws), ct))
     if len(args) < 1:
         return
     if si < int(args[0]):
         sys.exit(1)
 
 def gen_config(s, g):
-    t = Template(file('template.toml').read())
-    print 'strategies = %s, guess = %s' % (s, g)
+    with open('template.toml') as f:
+        t = Template(f.read())
+    print('strategies = %s, guess = %s' % (s, g))
     f = open('winminer.toml', 'w')
     f.write(t.substitute(strategies=s, guess=g))
     f.close()
