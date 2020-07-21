@@ -56,11 +56,6 @@ var (
 
 func main() {
 	cfgFile := flag.String("c", "winminer.toml", "config file name")
-	if _, err := toml.DecodeFile(*cfgFile, &config); err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	dt := flag.Bool("dt", false, "dump text of cases or not")
 	dtFile := flag.String("dt-file", "", "file name prefix for dumping cases")
@@ -69,8 +64,13 @@ func main() {
 	s := flag.Int("s", 0, "random seed for generating benchmark cases")
 	f := flag.String("f", "cases.txt", "input file of benchmark cases")
 	d := flag.Int("d", 0, "dump board into .png file - 0: don't dump; 1: only dump worthy failures; 2: dump all")
-
 	flag.Parse()
+
+	if _, err := toml.DecodeFile(*cfgFile, &config); err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	rng = rand.New(rand.NewSource(int64(*s)))
 	if *gb {
 		genBench(*n, *s, *level)
