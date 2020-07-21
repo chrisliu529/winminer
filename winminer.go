@@ -55,7 +55,8 @@ var (
 )
 
 func main() {
-	if _, err := toml.DecodeFile("winminer.toml", &config); err != nil {
+	cfgFile := flag.String("c", "winminer.toml", "config file name")
+	if _, err := toml.DecodeFile(*cfgFile, &config); err != nil {
 		fmt.Println(err)
 		return
 	}
