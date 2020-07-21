@@ -11,9 +11,6 @@ parser = OptionParser()
 parser.add_option("-c", "--combinations",
                   action="store_true", dest="bench_combinations", default=False,
                   help="run benchmarks with config combinations")
-parser.add_option("-f", "--filters",
-                  action="store_true", dest="test_filters", default=False,
-                  help="test filters of different strategies")
 
 (options, args) = parser.parse_args()
 
@@ -63,23 +60,7 @@ def bench_combinations():
             gen_config(strategies[:i+1], gs[j])
             bench()
 
-def test_filter(name, infile):
-    get_output("./winminer -dt -dt-file %s -f %s" % (name, infile))
-
-def test_filters():
-    infile = 'cases0.txt'
-    get_output("./winminer -gb -lv 2 -s 1 -n 100 > %s" % infile)
-    strategies=["diff", "reduce"]
-    for i in range(len(strategies)):
-        st = strategies[:i+1]
-        gen_config(st, "corner")
-        name = '_'.join(st)
-        test_filter(name, infile)
-        inflie = name + '_failed.txt'
-
 if options.bench_combinations:
     bench_combinations()
-elif options.test_filters:
-    test_filters()
 else:
     bench()
