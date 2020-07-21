@@ -4,6 +4,8 @@ guess = "$guess"
 
 #verbose = true
 
+accept = 0.3
+
 [[levels]]
 row = 9
 column = 9
