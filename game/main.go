@@ -35,10 +35,16 @@ func main() {
 	w.SetContent(tutorial)
 	w.Resize(fyne.NewSize(260, 100)) //size(845, 400) for (30, 16)
 	w.SetFixedSize(true)
-	w.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
-		fmt.Println(k)
+
+	repaint := func() {
 		content.Objects = []fyne.CanvasObject{canvasScreen(w)}
 		content.Refresh()
+	}
+	repaint()
+	w.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeySpace {
+			repaint()
+		}
 	})
 	w.ShowAndRun()
 }
