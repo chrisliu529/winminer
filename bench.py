@@ -67,4 +67,5 @@ def bench_combinations():
         executor.map(bench, args)
 
 
-bench_combinations()
+if __name__ == '__main__':
+    bench_combinations()
