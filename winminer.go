@@ -405,7 +405,7 @@ func getLevel(n int) (level int, err error) {
 	return level, errors.New("Level not found")
 }
 
-type tileExit struct {
+type tileExt struct {
 	value    int
 	revealed bool
 }
@@ -420,7 +420,7 @@ const (
 )
 
 type player struct {
-	tiles      [][]tileExit
+	tiles      [][]tileExt
 	view       map[*intset.IntSet]int
 	sure       int
 	guess      int
@@ -446,9 +446,9 @@ func initPlayer(b *board, i int) *player {
 
 func (p *player) init(b *board) {
 	p.row, p.col, p.mine = b.row, b.col, b.mine
-	p.tiles = make([][]tileExit, p.row)
+	p.tiles = make([][]tileExt, p.row)
 	for i := range p.tiles {
-		t := make([]tileExit, p.col)
+		t := make([]tileExt, p.col)
 		for j := range t {
 			t[j].value = tsUnknown
 			t[j].revealed = false
@@ -726,15 +726,15 @@ func (p *player) circle(x, y, v int) (*intset.IntSet, int) {
 	return &s, v
 }
 
-func isUnknown(t *tileExit) bool {
+func isUnknown(t *tileExt) bool {
 	return t.value == tsUnknown
 }
 
-func isNumber(t *tileExit) bool {
+func isNumber(t *tileExt) bool {
 	return t.value >= 0 && t.value <= 8
 }
 
-func isFlag(t *tileExit) bool {
+func isFlag(t *tileExt) bool {
 	return t.value == tsFlag
 }
 
@@ -962,7 +962,7 @@ func (p *player) isConsistent() bool {
 	return true
 }
 
-func (p *player) neighbors(x, y int, filter func(*tileExit) bool) int {
+func (p *player) neighbors(x, y int, filter func(*tileExt) bool) int {
 	r, c := p.row, p.col
 	n := 0
 	var f = func(xt, yt int) {
@@ -1048,7 +1048,7 @@ func (p *player) isle0(x, y int, result *[]int, visited map[int]bool) {
 	}
 }
 
-func (p *player) one(filter func(*tileExit) bool) (int, int) {
+func (p *player) one(filter func(*tileExt) bool) (int, int) {
 	for y := range p.tiles {
 		for x := range p.tiles[y] {
 			if filter(&p.tiles[y][x]) {
@@ -1059,7 +1059,7 @@ func (p *player) one(filter func(*tileExit) bool) (int, int) {
 	return -1, -1
 }
 
-func (p *player) collect(filter func(*tileExit) bool) []int {
+func (p *player) collect(filter func(*tileExt) bool) []int {
 	res := []int{}
 	for y := range p.tiles {
 		for x := range p.tiles[y] {
