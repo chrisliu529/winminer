@@ -1,1 +1,1 @@
-go build && ./gen_cases.sh && ./bench.py
+go build -o winminer && ./gen_cases.sh && ./bench.py
