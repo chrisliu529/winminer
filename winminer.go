@@ -52,9 +52,11 @@ var (
 	dumpText     bool
 	successCases *os.File
 	failedCases  *os.File
+	pngCounter 	 int
 )
 
 func main() {
+	pngCounter = 1
 	cfgFile := flag.String("c", "winminer.toml", "config file name")
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	n := flag.Int("n", 1, "number of benchmark cases to be generated, only works with -gb")
@@ -63,7 +65,7 @@ func main() {
 	dt := flag.Bool("dt", false, "dump text of cases or not")
 	dtFile := flag.String("dt-file", "", "file name prefix for dumping cases")
 	f := flag.String("f", "cases.txt", "input file of benchmark cases")
-	d := flag.Int("d", 0, "dump board into .png file - 0: don't dump; 1: only dump worthy failures; 2: dump all")
+	d := flag.Int("d", 0, "dump board into .png file - 0: don't dump; 1: only dump worthy failures; 2: dump all; 3: dump all pictures with file names in sequence to make video")
 	flag.Parse()
 
 	if _, err := toml.DecodeFile(*cfgFile, &config); err != nil {
@@ -176,6 +178,7 @@ const (
 	dumpNone = iota
 	dumpWorthyFailure
 	dumpAll
+	dumpVideo
 )
 
 func newGstats() map[string]*stats {
@@ -466,6 +469,9 @@ func (p *player) play(b *board) int {
 			verboseLog("### step %d ###\n", step)
 			if dumpPng == dumpAll {
 				p.dump(fmt.Sprintf("f%s-%d.png", p.gamename, step))
+			} else if dumpPng == dumpVideo {
+				p.dump(fmt.Sprintf("vs-%d.png", pngCounter))
+				pngCounter++
 			}
 			p.click(b, x, y)
 			step++
@@ -502,6 +508,10 @@ func (p *player) play(b *board) int {
 			p.guess++
 			continue
 		}
+	}
+	if dumpPng == dumpVideo {
+		p.dump(fmt.Sprintf("vs-%d.png", pngCounter))
+		pngCounter++
 	}
 	if b.status == tsWin {
 		verboseLog("Win!\n")
