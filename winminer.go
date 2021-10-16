@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/chrisliu529/gopl.io/ch6/intset"
@@ -52,7 +53,8 @@ var (
 	dumpText     bool
 	successCases *os.File
 	failedCases  *os.File
-	pngCounter 	 int
+	pngCounter   int
+	clickCounter int
 )
 
 func main() {
@@ -198,6 +200,7 @@ func runBench(filename string) {
 	check(err)
 	gstats := newGstats()
 	lines := strings.Split(string(text), "\n")
+	t1 := time.Now()
 	for i := range lines {
 		mines := strings.Split(lines[i], ",")
 		//ignore empty lines
@@ -230,16 +233,21 @@ func runBench(filename string) {
 			}
 		}
 	}
+	t2 := time.Now()
+	spent := t2.Sub(t1).Milliseconds()
 	win := sumSlice(wins)
 	lose := sumSlice(loses)
 	fmt.Printf("win: %.2f (%d, %d, %d), lose: %.2f\n",
 		float64(win)/float64(total), wins[0], wins[1], wins[2],
 		float64(lose)/float64(total))
-	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f)\n",
+	fmt.Printf("sure: %d(%.2f), guess: %d(%.2f), %d clicks in %d ms (%d clicks/s)\n",
 		sure,
 		float64(sure)/float64(totalClicks),
 		guess,
-		float64(guess)/float64(totalClicks))
+		float64(guess)/float64(totalClicks),
+		clickCounter,
+		spent,
+		int(float64(clickCounter)/float64(spent)*1000))
 	for k, v := range gstats {
 		fmt.Printf("%s: success = %d\n", k, v.success)
 		fmt.Printf("%s: failure = %d\n", k, v.failure)
@@ -474,6 +482,7 @@ func (p *player) play(b *board) int {
 				pngCounter++
 			}
 			p.click(b, x, y)
+			clickCounter++
 			step++
 		}
 	}
