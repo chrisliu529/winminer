@@ -4,6 +4,8 @@ import subprocess
 import sys
 import re
 import time
+import os
+import shlex
 from string import Template
 from concurrent.futures import ProcessPoolExecutor
 
@@ -43,16 +45,13 @@ def bench(args):
         f.write(t.substitute(strategies=s, guess=g))
 
     t = time.time()
-    out = get_output(f'./winminer -c {c} | grep win:')
+    binary = shlex.quote(os.environ.get('WINMINER_BINARY', './winminer'))
+    out = get_output(f'{binary} -c {shlex.quote(c)} | grep win:')
     ct = time.time() - t
     ws = wins(out.decode('utf-8'))
     si = score(ws)
     print('strategies = %s, guess = %s' % (s, g))
     print('score=%s %s %s, cost %.2f seconds' % (si, ws, ratio(ws), ct))
-    if len(args) < 1:
-        return
-    if si < int(args[0]):
-        sys.exit(1)
 
 
 def bench_combinations():
@@ -63,8 +62,9 @@ def bench_combinations():
         for j in range(len(gs)):
             args.append((strategies[:i+1], gs[j]))
 
-    with ProcessPoolExecutor() as executor:
-        executor.map(bench, args)
+    workers = os.environ.get('BENCH_WORKERS')
+    with ProcessPoolExecutor(max_workers=int(workers) if workers else None) as executor:
+        list(executor.map(bench, args))
 
 
 if __name__ == '__main__':

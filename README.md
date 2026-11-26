@@ -20,6 +20,17 @@ A new version (master branch) is a rewrite in golang to focus on the AI improvem
 
 It would take a few minutes.
 
+## Rust Benchmark CLI
+
+Build the Rust benchmark executable with `cargo build --release --bin winminer-rust`. To compare it with the Go executable using the same cases and configurations, run:
+
+```sh
+BENCH_WORKERS=1 WINMINER_BINARY=./winminer python3 bench.py
+BENCH_WORKERS=1 WINMINER_BINARY=./target/release/winminer-rust python3 bench.py
+```
+
+`BENCH_WORKERS=1` runs configurations sequentially to reduce timing noise. `WINMINER_BINARY` selects the executable; it defaults to `./winminer`.
+
 ## Web Game
 
 Start the local web server:
