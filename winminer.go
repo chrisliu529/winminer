@@ -59,6 +59,8 @@ var (
 func main() {
 	pngCounter = 1
 	cfgFile := flag.String("c", "winminer.toml", "config file name")
+	web := flag.Bool("web", false, "start the web game server")
+	addr := flag.String("addr", "127.0.0.1:8080", "web server address, only works with -web")
 	gb := flag.Bool("gb", false, "generate benchmark cases or not")
 	n := flag.Int("n", 1, "number of benchmark cases to be generated, only works with -gb")
 	s := flag.Int("s", 0, "random seed for generating benchmark cases, only works with -gb")
@@ -75,6 +77,10 @@ func main() {
 	}
 
 	rng = rand.New(rand.NewSource(int64(*s)))
+	if *web {
+		check(serveWeb(*addr))
+		return
+	}
 	if *gb {
 		genBench(*n, *s, *level)
 	} else {
@@ -136,6 +142,10 @@ func printBenchCase(bc []int) {
 }
 
 func benchCase(level int) []int {
+	return benchCaseWithRNG(level, rng)
+}
+
+func benchCaseWithRNG(level int, source *rand.Rand) []int {
 	lc := config.Levels[level-1]
 	row := lc.Row
 	col := lc.Column
@@ -148,7 +158,7 @@ func benchCase(level int) []int {
 	}
 	initClick := toIndex(initx, inity, col)
 	for i := 0; i < mine; {
-		mineTile := rng.Intn(len(mineCandidates))
+		mineTile := source.Intn(len(mineCandidates))
 		/* According to winmine game implementation,
 		the board will be re-shuffled if the first click is a mine.
 		So we fix the first click and never put a mine on it.
@@ -266,13 +276,21 @@ func runBench(filename string) {
 
 type tileInt int
 type board struct {
-	tiles  [][]tileInt
-	level  int
-	row    int
-	col    int
-	mine   int
-	status int
-	text   string
+	tiles        [][]tileInt
+	revealed     [][]bool
+	revealedSafe int
+	level        int
+	row          int
+	col          int
+	mine         int
+	status       int
+	text         string
+}
+
+type tileReveal struct {
+	x     int
+	y     int
+	value int
 }
 
 const (
@@ -284,6 +302,10 @@ func initBoard(mines []int) *board {
 	verboseLog("init board with %v %v\n", mines, len(mines))
 	level, err := getLevel(len(mines))
 	check(err)
+	return initBoardForLevel(level, mines)
+}
+
+func initBoardForLevel(level int, mines []int) *board {
 	b := &board{level: level}
 	b.setMines(mines)
 	return b
@@ -366,9 +388,59 @@ func (b *board) initTiles() {
 	c := config.Levels[b.level-1]
 	b.row, b.col, b.mine = c.Row, c.Column, c.Mine
 	b.tiles = make([][]tileInt, b.row)
+	b.revealed = nil
+	b.revealedSafe = 0
 	for i := range b.tiles {
 		b.tiles[i] = make([]tileInt, b.col)
 	}
+}
+
+func (b *board) reveal(x, y int) ([]tileReveal, error) {
+	if x < 0 || x >= b.col || y < 0 || y >= b.row {
+		return nil, errors.New("coordinates out of range")
+	}
+	if b.status != 0 {
+		return nil, errors.New("game is already finished")
+	}
+	if b.revealed == nil {
+		b.revealed = make([][]bool, b.row)
+		for i := range b.revealed {
+			b.revealed[i] = make([]bool, b.col)
+		}
+	}
+
+	queue := [][2]int{{x, y}}
+	revealed := make([]tileReveal, 0)
+	for len(queue) > 0 {
+		pos := queue[0]
+		queue = queue[1:]
+		x, y = pos[0], pos[1]
+		if b.revealed[y][x] {
+			continue
+		}
+		b.revealed[y][x] = true
+		value := int(b.tiles[y][x])
+		if value == -1 {
+			b.status = tsBoom
+			revealed = append(revealed, tileReveal{x: x, y: y, value: tsBoom})
+			return revealed, nil
+		}
+		revealed = append(revealed, tileReveal{x: x, y: y, value: value})
+		b.revealedSafe++
+		if value == 0 {
+			for ny := y - 1; ny <= y+1; ny++ {
+				for nx := x - 1; nx <= x+1; nx++ {
+					if nx >= 0 && nx < b.col && ny >= 0 && ny < b.row && !b.revealed[ny][nx] {
+						queue = append(queue, [2]int{nx, ny})
+					}
+				}
+			}
+		}
+	}
+	if b.revealedSafe == b.row*b.col-b.mine {
+		b.status = tsWin
+	}
+	return revealed, nil
 }
 
 func (b *board) String() string {
@@ -448,19 +520,26 @@ type player struct {
 	guesser    func() (int, int)
 	guessed    string
 	guessStats map[string]*stats
+	random     *rand.Rand
 }
 
 func initPlayer(b *board, i int) *player {
 	verboseLog("init player with level %d\n", b.level)
+	return newPlayer(b.row, b.col, b.mine, b.level, i)
+}
+
+func newPlayer(row, col, mine, level, i int) *player {
 	p := &player{
-		gamename: fmt.Sprintf("%d-%d", b.level, i),
-		guessed:  "none"}
-	p.init(b)
+		gamename: fmt.Sprintf("%d-%d", level, i),
+		guessed:  "none",
+		random:   rng,
+	}
+	p.init(row, col, mine)
 	return p
 }
 
-func (p *player) init(b *board) {
-	p.row, p.col, p.mine = b.row, b.col, b.mine
+func (p *player) init(row, col, mine int) {
+	p.row, p.col, p.mine = row, col, mine
 	p.tiles = make([][]tileExt, p.row)
 	for i := range p.tiles {
 		t := make([]tileExt, p.col)
@@ -499,7 +578,8 @@ func (p *player) play(b *board) int {
 			p.sure++
 			continue
 		}
-		safe := p.findSafe()
+		safe, err := p.findSafe()
+		check(err)
 		if p.mine == 0 {
 			b.status = tsWin
 			break
@@ -685,7 +765,7 @@ func (p *player) cornerGuess() (int, int) {
 func (p *player) randomGuess() (int, int) {
 	p.guessed = "random"
 	u := p.collect(isUnknown)
-	return toXY(u[rng.Intn(len(u))], p.col)
+	return toXY(u[p.random.Intn(len(u))], p.col)
 }
 
 func (p *player) refreshView() error {
@@ -760,7 +840,7 @@ func isFlag(t *tileExt) bool {
 	return t.value == tsFlag
 }
 
-func (p *player) findSafe() []int {
+func (p *player) findSafe() ([]int, error) {
 	stateChanged, needRefresh := true, true
 	safe := []int{}
 	for stateChanged || needRefresh {
@@ -768,7 +848,7 @@ func (p *player) findSafe() []int {
 		if needRefresh {
 			err := p.refreshView()
 			if err != nil {
-				check(err)
+				return nil, err
 			}
 		}
 		needRefresh = false
@@ -779,7 +859,7 @@ func (p *player) findSafe() []int {
 						safe = append(safe, e)
 					}
 				}
-				return safe
+				return safe, nil
 			}
 			if v == s.Len() {
 				for _, e := range s.Elems() {
@@ -789,7 +869,7 @@ func (p *player) findSafe() []int {
 						p.tiles[y][x].value = tsFlag
 						p.mine--
 						if p.mine == 0 {
-							return p.collect(isUnknown)
+							return p.collect(isUnknown), nil
 						}
 						needRefresh = true
 					}
@@ -841,7 +921,7 @@ func (p *player) findSafe() []int {
 					if s0.ProperContains(s1) && v0 == v1 {
 						s2 := s0.Copy()
 						s2.DifferenceWith(s1)
-						return s2.Elems()
+						return s2.Elems(), nil
 					}
 				}
 			}
@@ -858,7 +938,7 @@ func (p *player) findSafe() []int {
 		}
 	}
 
-	return safe
+	return safe, nil
 }
 
 /*

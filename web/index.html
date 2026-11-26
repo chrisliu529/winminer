@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Winminer</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Winminer</h1>
+        <p id="status" role="status">Starting game…</p>
+      </div>
+      <div class="controls">
+        <label for="level">Level</label>
+        <select id="level" aria-label="Game level"></select>
+        <button id="new-game">New game</button>
+        <button id="bot-step" disabled>Bot step</button>
+        <button id="auto" disabled>Auto play</button>
+      </div>
+    </header>
+    <p id="message" aria-live="polite"></p>
+    <div id="board" aria-label="Minesweeper board"></div>
+    <p class="help">Click a tile to reveal it. Right-click to toggle a flag.</p>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

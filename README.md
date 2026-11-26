@@ -20,6 +20,18 @@ A new version (master branch) is a rewrite in golang to focus on the AI improvem
 
 It would take a few minutes.
 
+## Web Game
+
+Start the local web server:
+
+```sh
+go run . -web
+```
+
+Then open http://127.0.0.1:8080. The server uses `winminer.toml` by default; pass `-c` to select another configuration or `-addr` to change the listening address. The browser can reveal tiles manually, toggle flags with the right mouse button, or ask the bot to make one move at a time.
+
+The HTTP API provides `GET /api/levels`, `POST /api/games`, `GET` and `DELETE /api/games/{id}`, plus `POST /api/games/{id}/click`, `/flag`, and `/bot/step`. Responses contain only revealed tiles and visible flags; the board layout and random seed stay on the server.
+
 ## Search Strategies
 
 ### Direct Search
