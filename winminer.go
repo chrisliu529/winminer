@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"image"
 	"image/png"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -86,8 +85,13 @@ func main() {
 		dumpText = *dt
 		if dumpText {
 			prefix := *dtFile
-			successCases, _ = os.Create(prefix + "_success.txt")
-			failedCases, _ = os.Create(prefix + "_failed.txt")
+			var err error
+			successCases, err = os.Create(prefix + "_success.txt")
+			check(err)
+			defer successCases.Close()
+			failedCases, err = os.Create(prefix + "_failed.txt")
+			check(err)
+			defer failedCases.Close()
 		}
 		runBench(*f)
 	}
@@ -187,7 +191,7 @@ func newGstats() map[string]*stats {
 	res := make(map[string]*stats)
 	m := []string{"first", "random", "corner", "min", "isle"}
 	for _, e := range m {
-		res[e] = &stats{success: 0, failure: 0}
+		res[e] = &stats{}
 	}
 	return res
 }
@@ -196,7 +200,7 @@ func runBench(filename string) {
 	var total, sure, guess, totalClicks int
 	wins := make([]int, len(config.Levels))
 	loses := make([]int, len(config.Levels))
-	text, err := ioutil.ReadFile(filename)
+	text, err := os.ReadFile(filename)
 	check(err)
 	gstats := newGstats()
 	lines := strings.Split(string(text), "\n")
@@ -216,13 +220,19 @@ func runBench(filename string) {
 			res := player.play(board)
 			if res == tsWin {
 				wins[board.level-1]++
-				successCases.WriteString(lines[i] + "\n")
+				if successCases != nil {
+					_, err = successCases.WriteString(lines[i] + "\n")
+					check(err)
+				}
 			} else {
 				if dumpPng >= dumpWorthyFailure && player.worthDump() {
 					player.dump(fmt.Sprintf("f%s.png", player.gamename))
 				}
 				loses[board.level-1]++
-				failedCases.WriteString(lines[i] + "\n")
+				if failedCases != nil {
+					_, err = failedCases.WriteString(lines[i] + "\n")
+					check(err)
+				}
 			}
 			sure += player.sure
 			guess += player.guess
@@ -274,7 +284,7 @@ func initBoard(mines []int) *board {
 	verboseLog("init board with %v %v\n", mines, len(mines))
 	level, err := getLevel(len(mines))
 	check(err)
-	b := &board{level: level, status: 0}
+	b := &board{level: level}
 	b.setMines(mines)
 	return b
 }
@@ -357,18 +367,14 @@ func (b *board) initTiles() {
 	b.row, b.col, b.mine = c.Row, c.Column, c.Mine
 	b.tiles = make([][]tileInt, b.row)
 	for i := range b.tiles {
-		t := make([]tileInt, b.col)
-		for j := range t {
-			t[j] = 0
-		}
-		b.tiles[i] = t
+		b.tiles[i] = make([]tileInt, b.col)
 	}
 }
 
 func (b *board) String() string {
 	var buf bytes.Buffer
 	for y := range b.tiles {
-		fmt.Println(&buf, b.tiles[y])
+		fmt.Fprintln(&buf, b.tiles[y])
 	}
 	return buf.String()
 }
@@ -388,13 +394,13 @@ func (b *board) dump(outpath string) {
 			render(img, 16*x, 16*y, imgFile)
 		}
 	}
-	png.Encode(file, img)
+	check(png.Encode(file, img))
 }
 
 func render(img *image.RGBA, x int, y int, filename string) {
 	srcImg := images[filename]
 	if srcImg == nil {
-		log.Fatal(fmt.Sprintf("image %s not loaded", filename))
+		log.Fatalf("image %s not loaded", filename)
 	}
 	for i := 0; i < 16; i++ {
 		for j := 0; j < 16; j++ {
@@ -447,8 +453,6 @@ type player struct {
 func initPlayer(b *board, i int) *player {
 	verboseLog("init player with level %d\n", b.level)
 	p := &player{
-		sure:     0,
-		guess:    0,
 		gamename: fmt.Sprintf("%d-%d", b.level, i),
 		guessed:  "none"}
 	p.init(b)
@@ -462,7 +466,6 @@ func (p *player) init(b *board) {
 		t := make([]tileExt, p.col)
 		for j := range t {
 			t[j].value = tsUnknown
-			t[j].revealed = false
 		}
 		p.tiles[i] = t
 	}
@@ -758,9 +761,7 @@ func isFlag(t *tileExt) bool {
 }
 
 func (p *player) findSafe() []int {
-	var stateChanged, needRefresh bool
-	needRefresh = true
-	stateChanged = true
+	stateChanged, needRefresh := true, true
 	safe := []int{}
 	for stateChanged || needRefresh {
 		stateChanged = false
@@ -860,7 +861,8 @@ func (p *player) findSafe() []int {
 	return safe
 }
 
-/*TODO: the O(n) method below looks very ugly...
+/*
+TODO: the O(n) method below looks very ugly...
 However, it may be an overkill to add 2 more maps:
 1. string->*intset.IntSet
 2. string->int
@@ -896,7 +898,6 @@ func combinations(n, m int, f func([]int)) {
 				rc(i+1, j+1)
 			}
 		}
-		return
 	}
 	rc(0, 0)
 }
@@ -1144,7 +1145,7 @@ func (p *player) dump(outpath string) {
 			render(img, 16*x, 16*y, imgFile)
 		}
 	}
-	png.Encode(file, img)
+	check(png.Encode(file, img))
 }
 
 func strategyEnabled(name string) bool {
