@@ -63,6 +63,37 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 
+  testWidgets('shows a bomb icon for an exploded cell', (tester) async {
+    _mockWindowResizing();
+    addTearDown(_clearWindowResizingMock);
+    final api = _FakeGameApi(
+      clickResult: const GameCell(state: CellState.exploded),
+    );
+    await tester.pumpWidget(MaterialApp(home: GameScreen(api: api)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('💣'), findsOneWidget);
+  });
+
+  testWidgets('shows fireworks when the game is won', (tester) async {
+    _mockWindowResizing();
+    addTearDown(_clearWindowResizingMock);
+    final api = _FakeGameApi(clickStatus: GameStatus.won);
+    await tester.pumpWidget(MaterialApp(home: GameScreen(api: api)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('You won!'), findsOneWidget);
+    expect(find.byKey(const ValueKey('victory-fireworks')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('resizes the window when the active board size changes', (
     tester,
   ) async {
@@ -119,9 +150,13 @@ void main() {
 class _FakeGameApi implements GameApi {
   _FakeGameApi({
     this.levels = const [GameLevel(level: 1, rows: 2, columns: 2, mines: 1)],
+    this.clickResult = const GameCell(state: CellState.revealed, value: 0),
+    this.clickStatus,
   });
 
   final List<GameLevel> levels;
+  final GameCell clickResult;
+  final GameStatus? clickStatus;
   int _nextGameId = 1;
   int botSteps = 0;
   (int, int)? lastFlaggedCell;
@@ -152,12 +187,7 @@ class _FakeGameApi implements GameApi {
 
   @override
   Future<GameSnapshot> click(String gameId, int x, int y) async {
-    return _update(
-      gameId,
-      x,
-      y,
-      const GameCell(state: CellState.revealed, value: 0),
-    );
+    return _update(gameId, x, y, clickResult, status: clickStatus);
   }
 
   @override
@@ -194,17 +224,24 @@ class _FakeGameApi implements GameApi {
     _games.remove(gameId);
   }
 
-  GameSnapshot _update(String gameId, int x, int y, GameCell cell) {
+  GameSnapshot _update(
+    String gameId,
+    int x,
+    int y,
+    GameCell cell, {
+    GameStatus? status,
+  }) {
     final game = _games[gameId]!;
     final cells = [...game.cells];
     cells[y * game.columns + x] = cell;
-    return _replace(game, cells: cells);
+    return _replace(game, cells: cells, status: status);
   }
 
   GameSnapshot _replace(
     GameSnapshot game, {
     required List<GameCell> cells,
     int? remainingMines,
+    GameStatus? status,
   }) {
     final updated = GameSnapshot(
       id: game.id,
@@ -212,7 +249,7 @@ class _FakeGameApi implements GameApi {
       columns: game.columns,
       mines: game.mines,
       remainingMines: remainingMines ?? game.remainingMines,
-      status: game.status,
+      status: status ?? game.status,
       cells: cells,
     );
     _games[game.id] = updated;

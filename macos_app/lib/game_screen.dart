@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -18,7 +19,8 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
+class _GameScreenState extends State<GameScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const _windowChannel = MethodChannel('winminer/window');
   static const _windowMinWidth = 560.0;
   static const _toolbarSingleRowWidth = 800.0;
@@ -38,14 +40,27 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       2;
 
   late final GameController _controller;
+  late final AnimationController _fireworksController;
+  AudioPlayer? _victoryPlayer;
+  late final CustomPainter _fireworksPainter;
   int? _windowRows;
   int? _windowColumns;
+  String? _lastGameId;
+  GameStatus? _lastGameStatus;
   String? _windowResizeError;
+  bool _showFireworks = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _fireworksController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+      value: 1,
+    )..addStatusListener(_handleFireworksStatus);
+    _victoryPlayer = AudioPlayer();
+    _fireworksPainter = _FireworksPainter(animation: _fireworksController);
     _controller = GameController(widget.api);
     _controller.gameState.addListener(_handleGameChanged);
     unawaited(_controller.initialize());
@@ -53,7 +68,44 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
   void _handleGameChanged() {
     final game = _controller.game;
-    if (game != null) _scheduleWindowResize(game);
+    if (game == null) return;
+    _scheduleWindowResize(game);
+    final justWon =
+        game.status == GameStatus.won &&
+        (_lastGameId != game.id || _lastGameStatus != GameStatus.won);
+    _lastGameId = game.id;
+    _lastGameStatus = game.status;
+    if (justWon) {
+      setState(() => _showFireworks = true);
+      _fireworksController.forward(from: 0);
+      unawaited(_playVictorySound());
+    }
+  }
+
+  void _handleFireworksStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted && _showFireworks) {
+      setState(() => _showFireworks = false);
+    }
+  }
+
+  Future<void> _playVictorySound() async {
+    final player = _victoryPlayer ??= AudioPlayer();
+    try {
+      await player.play(AssetSource('audio/victory.wav'));
+    } on AudioPlayerException catch (error) {
+      _showVictorySoundError(error);
+    } on PlatformException catch (error) {
+      _showVictorySoundError(error);
+    } on MissingPluginException catch (error) {
+      _showVictorySoundError(error);
+    }
+  }
+
+  void _showVictorySoundError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Unable to play victory sound: $error')),
+    );
   }
 
   @override
@@ -70,6 +122,9 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _controller.gameState.removeListener(_handleGameChanged);
     _controller.dispose();
+    _fireworksController.dispose();
+    final victoryPlayer = _victoryPlayer;
+    if (victoryPlayer != null) unawaited(victoryPlayer.dispose());
     super.dispose();
   }
 
@@ -80,41 +135,57 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         title: const Text('Winminer'),
         backgroundColor: Theme.of(context).colorScheme.surface,
       ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
-            child: Padding(
-              padding: MediaQuery.sizeOf(context).width < 600
-                  ? const EdgeInsets.fromLTRB(12, 12, 12, 16)
-                  : const EdgeInsets.fromLTRB(24, 16, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _GameToolbar(controller: _controller),
-                  _ControllerErrorBanner(controller: _controller),
-                  if (_windowResizeError != null) ...[
-                    const SizedBox(height: 12),
-                    _ErrorBanner(message: _windowResizeError!),
-                  ],
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _GameStatus(controller: _controller),
-                        const SizedBox(height: 16),
-                        Expanded(child: _Minefield(controller: _controller)),
-                        const SizedBox(height: 10),
-                        _GameHint(controller: _controller),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Padding(
+                  padding: MediaQuery.sizeOf(context).width < 600
+                      ? const EdgeInsets.fromLTRB(12, 12, 12, 16)
+                      : const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _GameToolbar(controller: _controller),
+                      _ControllerErrorBanner(controller: _controller),
+                      if (_windowResizeError != null) ...[
+                        const SizedBox(height: 12),
+                        _ErrorBanner(message: _windowResizeError!),
                       ],
-                    ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _GameStatus(controller: _controller),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: _Minefield(controller: _controller),
+                            ),
+                            const SizedBox(height: 10),
+                            _GameHint(controller: _controller),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          if (_showFireworks)
+            Positioned.fill(
+              key: const ValueKey('victory-fireworks'),
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _fireworksPainter,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -165,6 +236,105 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() => _windowResizeError = 'Unable to resize window: $error');
   }
+}
+
+class _FireworksPainter extends CustomPainter {
+  _FireworksPainter({required this.animation}) : super(repaint: animation);
+
+  final Animation<double> animation;
+
+  static const _centers = [
+    Offset(0.2, 0.24),
+    Offset(0.8, 0.25),
+    Offset(0.5, 0.4),
+  ];
+  static const _colors = [
+    Color(0xffffd166),
+    Color(0xffff5d8f),
+    Color(0xff70e1f5),
+    Color(0xffa8e06c),
+    Color(0xffc7a2ff),
+  ];
+  static final _particles = _createParticles();
+
+  static List<_FireworkParticle> _createParticles() {
+    final random = math.Random(27);
+    return [
+      for (var burst = 0; burst < _centers.length; burst++)
+        for (var index = 0; index < 32; index++)
+          _FireworkParticle(
+            center: _centers[burst],
+            angle: 2 * math.pi * index / 32 + random.nextDouble() * 0.08,
+            distance: 0.55 + random.nextDouble() * 0.45,
+            delay: burst * 0.17,
+            color: _colors[(index + burst * 2) % _colors.length],
+          ),
+    ];
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shortestSide = math.min(size.width, size.height);
+    if (shortestSide <= 0) return;
+
+    for (final particle in _particles) {
+      final progress = ((animation.value - particle.delay) / 0.58)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      if (progress <= 0 || progress >= 1) continue;
+
+      final origin = Offset(
+        particle.center.dx * size.width,
+        particle.center.dy * size.height,
+      );
+      final radius = shortestSide * 0.24 * particle.distance;
+      Offset position(double amount) =>
+          origin +
+          Offset(
+            math.cos(particle.angle) * radius * amount,
+            math.sin(particle.angle) * radius * amount +
+                shortestSide * 0.1 * amount * amount,
+          );
+      final previous = position(math.max(0, progress - 0.09));
+      final current = position(progress);
+      final alpha = (1 - progress) * math.min(1.0, progress * 8);
+      final color = particle.color.withValues(alpha: alpha);
+      canvas
+        ..drawLine(
+          previous,
+          current,
+          Paint()
+            ..color = color
+            ..strokeWidth = 2
+            ..strokeCap = StrokeCap.round,
+        )
+        ..drawCircle(
+          current,
+          1.5 + (1 - progress) * 1.5,
+          Paint()..color = color,
+        );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FireworksPainter oldDelegate) =>
+      oldDelegate.animation != animation;
+}
+
+class _FireworkParticle {
+  const _FireworkParticle({
+    required this.center,
+    required this.angle,
+    required this.distance,
+    required this.delay,
+    required this.color,
+  });
+
+  final Offset center;
+  final double angle;
+  final double distance;
+  final double delay;
+  final Color color;
 }
 
 class _GameToolbar extends StatelessWidget {
@@ -679,10 +849,12 @@ class _MineCell extends StatelessWidget {
         size: math.min(18, cellSize * 0.55).toDouble(),
         color: Color(0xffa12622),
       ),
-      CellState.exploded => Icon(
-        Icons.close,
-        size: math.min(20, cellSize * 0.6).toDouble(),
-        color: Color(0xff7e1814),
+      CellState.exploded => Text(
+        '💣',
+        style: TextStyle(
+          fontSize: math.min(20, cellSize * 0.6).toDouble(),
+          height: 1,
+        ),
       ),
       CellState.revealed =>
         cell.value == 0

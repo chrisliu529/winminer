@@ -7,6 +7,7 @@ environment:
   sdk: ^3.14.0
 
 dependencies:
+  audioplayers: ^6.8.1
   ffi: ^2.1.4
   flutter:
     sdk: flutter
@@ -19,3 +20,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/audio/victory.wav
