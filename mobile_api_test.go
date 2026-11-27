@@ -44,3 +44,93 @@ func TestMobileDispatchRejectsInvalidActions(t *testing.T) {
 		t.Fatal("expected missing game to be rejected")
 	}
 }
+
+func TestPhoneLevelsAndFirstClickSafety(t *testing.T) {
+	testWebHandler(t)
+	server := newMobileServer()
+	result, err := dispatchMobileRequest(server, mobileRequest{Action: "getLevels", Phone: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	levels := result.(map[string]interface{})["levels"].([]levelOption)
+	if len(levels) != 2 || levels[0] != (levelOption{1, 8, 8, 10}) || levels[1] != (levelOption{2, 10, 10, 20}) {
+		t.Fatalf("unexpected phone levels: %+v", levels)
+	}
+	for level := 1; level <= 2; level++ {
+		game, err := newRandomPhoneGame(level)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var x, y int
+		for row := range game.board.tiles {
+			for col, tile := range game.board.tiles[row] {
+				if tile.isMine() {
+					x, y = col, row
+					break
+				}
+			}
+		}
+		if err := game.click(x, y); err != nil {
+			t.Fatal(err)
+		}
+		if game.board.status == tsBoom || game.board.tiles[y][x].isMine() {
+			t.Fatal("first click hit a mine")
+		}
+		mines := 0
+		for _, row := range game.board.tiles {
+			for _, tile := range row {
+				if tile.isMine() {
+					mines++
+				}
+			}
+		}
+		if mines != phoneLevels[level-1].Mine {
+			t.Fatalf("got %d mines", mines)
+		}
+	}
+}
+
+func TestPhoneSnapshotShowsMinesOnlyAfterGameEnds(t *testing.T) {
+	testWebHandler(t)
+	game, err := newRandomPhoneGame(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []int{0, tsBoom, tsWin} {
+		game.board.status = status
+		count := 0
+		for _, cell := range game.snapshot().Cells {
+			if cell.State == "mine" {
+				count++
+			}
+		}
+		want := 10
+		if status == 0 {
+			want = 0
+		}
+		if count != want {
+			t.Fatalf("status %d: got %d visible mines, want %d", status, count, want)
+		}
+	}
+}
+
+func TestPhoneFloodDoesNotRevealFlags(t *testing.T) {
+	testWebHandler(t)
+	game, err := newRandomPhoneGame(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game.board.initTilesForConfig(phoneLevels[0])
+	game.board.tiles[7][7] = -1
+	game.board.setHints()
+	game.opened = true
+	if err := game.toggleFlag(1, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := game.click(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if game.player.tiles[0][1].value != tsFlag || game.player.tiles[0][1].revealed {
+		t.Fatal("flood reveal removed a flag")
+	}
+}

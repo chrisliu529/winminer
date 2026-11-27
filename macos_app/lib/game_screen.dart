@@ -9,11 +9,13 @@ import 'package:material_ui/material_ui.dart';
 import 'game_api.dart';
 import 'game_controller.dart';
 import 'game_models.dart';
+import 'mobile_game_screen.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, required this.api});
+  const GameScreen({super.key, required this.api, this.mobile});
 
   final GameApi api;
+  final bool? mobile;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -130,51 +132,57 @@ class _GameScreenState extends State<GameScreen>
 
   @override
   Widget build(BuildContext context) {
+    final mobile = widget.mobile ?? (Platform.isIOS || Platform.isAndroid);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Winminer'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-      ),
+      appBar: mobile
+          ? null
+          : AppBar(
+              title: const Text('Winminer'),
+              backgroundColor: Theme.of(context).colorScheme.surface,
+            ),
       body: Stack(
         children: [
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Padding(
-                  padding: MediaQuery.sizeOf(context).width < 600
-                      ? const EdgeInsets.fromLTRB(12, 12, 12, 16)
-                      : const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _GameToolbar(controller: _controller),
-                      _ControllerErrorBanner(controller: _controller),
-                      if (_windowResizeError != null) ...[
-                        const SizedBox(height: 12),
-                        _ErrorBanner(message: _windowResizeError!),
-                      ],
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _GameStatus(controller: _controller),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: _Minefield(controller: _controller),
-                            ),
-                            const SizedBox(height: 10),
-                            _GameHint(controller: _controller),
-                          ],
+          if (mobile)
+            MobileGameScreen(controller: _controller)
+          else
+            SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1120),
+                  child: Padding(
+                    padding: MediaQuery.sizeOf(context).width < 600
+                        ? const EdgeInsets.fromLTRB(12, 12, 12, 16)
+                        : const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _GameToolbar(controller: _controller),
+                        _ControllerErrorBanner(controller: _controller),
+                        if (_windowResizeError != null) ...[
+                          const SizedBox(height: 12),
+                          _ErrorBanner(message: _windowResizeError!),
+                        ],
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _GameStatus(controller: _controller),
+                              const SizedBox(height: 16),
+                              Expanded(
+                                child: _Minefield(controller: _controller),
+                              ),
+                              const SizedBox(height: 10),
+                              _GameHint(controller: _controller),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           if (_showFireworks)
             Positioned.fill(
               key: const ValueKey('victory-fireworks'),
@@ -919,13 +927,14 @@ class _MineCell extends StatelessWidget {
     final background = switch (cell.state) {
       CellState.unknown || CellState.flag => const Color(0xffcad3db),
       CellState.revealed => const Color(0xfff7f9fa),
-      CellState.exploded => const Color(0xfff4a3a0),
+      CellState.exploded || CellState.mine => const Color(0xfff4a3a0),
     };
     final border = revealed ? const Color(0xffd3dae0) : const Color(0xff9ca8b3);
     final label = switch (cell.state) {
       CellState.unknown => 'Hidden at ${x + 1}, ${y + 1}',
       CellState.flag => 'Flag at ${x + 1}, ${y + 1}',
       CellState.exploded => 'Mine at ${x + 1}, ${y + 1}',
+      CellState.mine => 'Mine at ${x + 1}, ${y + 1}',
       CellState.revealed =>
         cell.value == 0
             ? 'Empty at ${x + 1}, ${y + 1}'
@@ -938,7 +947,7 @@ class _MineCell extends StatelessWidget {
         size: math.min(18, cellSize * 0.55).toDouble(),
         color: Color(0xffa12622),
       ),
-      CellState.exploded => Text(
+      CellState.exploded || CellState.mine => Text(
         '💣',
         style: TextStyle(
           fontSize: math.min(20, cellSize * 0.6).toDouble(),

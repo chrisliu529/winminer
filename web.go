@@ -47,6 +47,8 @@ type webGame struct {
 	id     string
 	board  *board
 	player *player
+	phone  bool
+	opened bool
 }
 
 type webServer struct {
@@ -223,19 +225,27 @@ func newRandomWebGame(level int) (*webGame, error) {
 	if level < 1 || level > len(config.Levels) {
 		return nil, errors.New("invalid level")
 	}
+	id, seed, err := randomGameIdentity()
+	if err != nil {
+		return nil, err
+	}
+	return newWebGame(id, level, seed)
+}
+
+func randomGameIdentity() (string, int64, error) {
 	var idBytes [16]byte
 	if _, err := rand.Read(idBytes[:]); err != nil {
-		return nil, err
+		return "", 0, err
 	}
 	var seedBytes [8]byte
 	if _, err := rand.Read(seedBytes[:]); err != nil {
-		return nil, err
+		return "", 0, err
 	}
 	var seed int64
 	for i, b := range seedBytes {
 		seed |= int64(b) << (8 * i)
 	}
-	return newWebGame(hex.EncodeToString(idBytes[:]), level, seed)
+	return hex.EncodeToString(idBytes[:]), seed, nil
 }
 
 func newWebGame(id string, level int, seed int64) (*webGame, error) {
@@ -262,12 +272,42 @@ func (g *webGame) click(x, y int) error {
 	if g.player.tiles[y][x].value == tsFlag {
 		return errors.New("remove the flag before clicking this tile")
 	}
-	revealed, err := g.board.reveal(x, y)
+	if g.phone && !g.opened {
+		g.ensureFirstClickSafe(x, y)
+		g.opened = true
+	}
+	revealed, err := g.reveal(x, y)
 	if err != nil {
 		return err
 	}
 	g.player.observe(revealed)
 	return nil
+}
+
+func (g *webGame) ensureFirstClickSafe(x, y int) {
+	if !g.board.tiles[y][x].isMine() {
+		return
+	}
+	b := g.board
+	mines := make([]int, 0, b.mine)
+	available := make([]int, 0, b.row*b.col-b.mine)
+	for row := range b.tiles {
+		for col, tile := range b.tiles[row] {
+			index := row*b.col + col
+			if tile.isMine() && (col != x || row != y) {
+				mines = append(mines, index)
+			} else if !tile.isMine() {
+				available = append(available, index)
+			}
+		}
+	}
+	mines = append(mines, available[g.player.random.Intn(len(available))])
+	b.initTilesForConfig(levelConfig{Row: b.row, Column: b.col, Mine: b.mine})
+	for _, index := range mines {
+		mx, my := toXY(index, b.col)
+		b.tiles[my][mx] = -1
+	}
+	b.setHints()
 }
 
 func (g *webGame) toggleFlag(x, y int) error {
@@ -308,12 +348,23 @@ func (g *webGame) botStep() error {
 	if g.player.tiles[y][x].value == tsFlag {
 		return errors.New("bot selected a flagged tile")
 	}
-	revealed, err := g.board.reveal(x, y)
+	if g.phone && !g.opened {
+		g.ensureFirstClickSafe(x, y)
+		g.opened = true
+	}
+	revealed, err := g.reveal(x, y)
 	if err != nil {
 		return err
 	}
 	g.player.observe(revealed)
 	return nil
+}
+
+func (g *webGame) reveal(x, y int) ([]tileReveal, error) {
+	if g.phone {
+		return g.board.revealWithFlags(x, y, g.player.tiles)
+	}
+	return g.board.reveal(x, y)
 }
 
 func (g *webGame) snapshot() gameSnapshot {
@@ -331,6 +382,8 @@ func (g *webGame) snapshotLocked() gameSnapshot {
 			switch {
 			case tile.value == tsBoom:
 				cell.State = "exploded"
+			case g.phone && g.board.status != 0 && g.board.tiles[y][x].isMine():
+				cell.State = "mine"
 			case tile.revealed:
 				value := tile.value
 				cell.State = "revealed"

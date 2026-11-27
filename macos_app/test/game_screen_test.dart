@@ -5,6 +5,7 @@ import 'package:winminer_app/game_api.dart';
 import 'package:winminer_app/game_controller.dart';
 import 'package:winminer_app/game_models.dart';
 import 'package:winminer_app/game_screen.dart';
+import 'package:winminer_app/mobile_game_screen.dart';
 
 const _windowChannel = MethodChannel('winminer/window');
 
@@ -197,6 +198,158 @@ void main() {
     expect(find.text('New game'), findsOneWidget);
     expect(find.byKey(const ValueKey('game-1-0')), findsOneWidget);
   });
+
+  testWidgets('phone controls flag at 400ms and switch tap mode', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = _FakeGameApi();
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(api: api, mobile: true)),
+    );
+    await tester.pumpAndSettle();
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('game-1-0'))),
+    );
+    await tester.pump(const Duration(milliseconds: 399));
+    expect(api.lastFlaggedCell, isNull);
+    await tester.pump(const Duration(milliseconds: 2));
+    await tester.pump();
+    expect(api.lastFlaggedCell, (0, 0));
+    await gesture.up();
+    await tester.pump();
+    expect(find.byIcon(Icons.flag), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('flag-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('game-1-1')));
+    await tester.pump();
+    expect(api.lastFlaggedCell, (1, 0));
+    expect(find.byIcon(Icons.flag), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('phone solver appears after inactivity and resets on new game', (
+    tester,
+  ) async {
+    final api = _FakeGameApi();
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(api: api, mobile: true)),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 6));
+    expect(find.byKey(const ValueKey('bot-step')), findsNothing);
+    final restartButton = tester.widget(find.byKey(const ValueKey('restart')));
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    expect(
+      identical(
+        restartButton,
+        tester.widget(find.byKey(const ValueKey('restart'))),
+      ),
+      isTrue,
+    );
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.byKey(const ValueKey('bot-step')), findsNothing);
+    await tester.longPress(find.byKey(const ValueKey('game-1-1')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.byKey(const ValueKey('bot-step')), findsNothing);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(const ValueKey('bot-step')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('bot-step')));
+    await tester.pump();
+    expect(api.botSteps, 1);
+    await tester.tap(find.byKey(const ValueKey('restart')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('bot-step')), findsNothing);
+    expect(find.byKey(const ValueKey('game-2-0')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('phone timer starts on reveal, survives background and stops', (
+    tester,
+  ) async {
+    final api = _FakeGameApi();
+    final controller = GameController(api);
+    await controller.initialize();
+    var now = DateTime(2026, 1, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(controller: controller, now: () => now),
+        ),
+      ),
+    );
+    expect(find.bySemanticsLabel('000'), findsOneWidget);
+    await tester.longPress(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    now = now.add(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.bySemanticsLabel('000'), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('game-1-1')));
+    await tester.pump();
+    now = now.add(const Duration(seconds: 13));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.bySemanticsLabel('013'), findsOneWidget);
+    expect(find.byKey(const ValueKey('bot-step')), findsOneWidget);
+    api.clickStatus = GameStatus.lost;
+    await tester.tap(find.byKey(const ValueKey('game-1-2')));
+    await tester.pump();
+    now = now.add(const Duration(seconds: 20));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.bySemanticsLabel('013'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('phone difficulty changes board size and timer caps at 999', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = GameController(
+      _FakeGameApi(
+        levels: const [
+          GameLevel(level: 1, rows: 8, columns: 8, mines: 10),
+          GameLevel(level: 2, rows: 10, columns: 10, mines: 20),
+        ],
+      ),
+    );
+    await controller.initialize();
+    var now = DateTime(2026, 1, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(controller: controller, now: () => now),
+        ),
+      ),
+    );
+    expect(find.byKey(const ValueKey('game-1-63')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('level-2')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('game-2-99')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('mobile-board'))).width,
+      greaterThan(250),
+    );
+    await tester.tap(find.byKey(const ValueKey('game-2-0')));
+    await tester.pump();
+    now = now.add(const Duration(seconds: 1002));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.bySemanticsLabel('999'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
 }
 
 class _FakeGameApi implements GameApi {
@@ -208,7 +361,7 @@ class _FakeGameApi implements GameApi {
 
   final List<GameLevel> levels;
   final GameCell clickResult;
-  final GameStatus? clickStatus;
+  GameStatus? clickStatus;
   int _nextGameId = 1;
   int botSteps = 0;
   (int, int)? lastFlaggedCell;

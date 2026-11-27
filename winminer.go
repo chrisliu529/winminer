@@ -386,6 +386,10 @@ func toIndex(x, y, column int) int {
 
 func (b *board) initTiles() {
 	c := config.Levels[b.level-1]
+	b.initTilesForConfig(c)
+}
+
+func (b *board) initTilesForConfig(c levelConfig) {
 	b.row, b.col, b.mine = c.Row, c.Column, c.Mine
 	b.tiles = make([][]tileInt, b.row)
 	b.revealed = nil
@@ -396,6 +400,10 @@ func (b *board) initTiles() {
 }
 
 func (b *board) reveal(x, y int) ([]tileReveal, error) {
+	return b.revealWithFlags(x, y, nil)
+}
+
+func (b *board) revealWithFlags(x, y int, tiles [][]tileExt) ([]tileReveal, error) {
 	if x < 0 || x >= b.col || y < 0 || y >= b.row {
 		return nil, errors.New("coordinates out of range")
 	}
@@ -415,7 +423,7 @@ func (b *board) reveal(x, y int) ([]tileReveal, error) {
 		pos := queue[0]
 		queue = queue[1:]
 		x, y = pos[0], pos[1]
-		if b.revealed[y][x] {
+		if b.revealed[y][x] || (tiles != nil && tiles[y][x].value == tsFlag) {
 			continue
 		}
 		b.revealed[y][x] = true

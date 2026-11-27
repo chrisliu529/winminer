@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	mathrand "math/rand"
 )
 
 type mobileRequest struct {
@@ -11,13 +12,23 @@ type mobileRequest struct {
 	GameID string `json:"gameId,omitempty"`
 	X      int    `json:"x,omitempty"`
 	Y      int    `json:"y,omitempty"`
+	Phone  bool   `json:"phone,omitempty"`
+}
+
+var phoneLevels = []levelConfig{
+	{Row: 8, Column: 8, Mine: 10},
+	{Row: 10, Column: 10, Mine: 20},
 }
 
 func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{}, error) {
 	switch request.Action {
 	case "getLevels":
-		levels := make([]levelOption, 0, len(config.Levels))
-		for i, level := range config.Levels {
+		configuredLevels := config.Levels
+		if request.Phone {
+			configuredLevels = phoneLevels
+		}
+		levels := make([]levelOption, 0, len(configuredLevels))
+		for i, level := range configuredLevels {
 			levels = append(levels, levelOption{
 				Level:   i + 1,
 				Rows:    level.Row,
@@ -31,7 +42,13 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 		if level == 0 {
 			level = 1
 		}
-		game, err := newRandomWebGame(level)
+		var game *webGame
+		var err error
+		if request.Phone {
+			game, err = newRandomPhoneGame(level)
+		} else {
+			game, err = newRandomWebGame(level)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -74,6 +91,28 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 	default:
 		return nil, fmt.Errorf("unknown action: %s", request.Action)
 	}
+}
+
+func newRandomPhoneGame(level int) (*webGame, error) {
+	if level < 1 || level > len(phoneLevels) {
+		return nil, errors.New("invalid level")
+	}
+	id, seed, err := randomGameIdentity()
+	if err != nil {
+		return nil, err
+	}
+	random := mathrand.New(mathrand.NewSource(seed))
+	settings := phoneLevels[level-1]
+	b := &board{level: level}
+	b.initTilesForConfig(settings)
+	for _, index := range random.Perm(settings.Row * settings.Column)[:settings.Mine] {
+		x, y := toXY(index, settings.Column)
+		b.tiles[y][x] = -1
+	}
+	b.setHints()
+	p := newPlayer(b.row, b.col, b.mine, level, 0)
+	p.random = random
+	return &webGame{id: id, board: b, player: p, phone: true}, nil
 }
 
 func findMobileGame(server *webServer, id string) (*webGame, error) {

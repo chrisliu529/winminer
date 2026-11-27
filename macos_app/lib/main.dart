@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'game_api.dart';
@@ -17,7 +19,7 @@ class WinminerApp extends StatelessWidget {
       brightness: Brightness.light,
     );
     return MaterialApp(
-      title: 'Winminer',
+      title: Platform.isIOS || Platform.isAndroid ? 'Minesweeper' : 'Winminer',
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,

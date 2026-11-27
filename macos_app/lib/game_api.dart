@@ -19,9 +19,7 @@ abstract interface class GameApi {
 class GoGameApi implements GameApi {
   Future<Map<String, dynamic>> _call(Map<String, Object?> request) async {
     final payload = jsonEncode(request);
-    final response = await Isolate.run<String>(
-      () => _invokeGo(payload),
-    );
+    final response = await Isolate.run<String>(() => _invokeGo(payload));
     final decoded = jsonDecode(response);
     if (decoded is! Map) {
       throw const FormatException('Go bridge returned a non-object response');
@@ -36,7 +34,10 @@ class GoGameApi implements GameApi {
 
   @override
   Future<List<GameLevel>> getLevels() async {
-    final response = await _call({'action': 'getLevels'});
+    final response = await _call({
+      'action': 'getLevels',
+      'phone': Platform.isIOS || Platform.isAndroid,
+    });
     final levels = response['levels'];
     if (levels is! List) {
       throw const FormatException('Go bridge response is missing levels');
@@ -51,7 +52,13 @@ class GoGameApi implements GameApi {
 
   @override
   Future<GameSnapshot> newGame(int level) async {
-    return _stateFrom(await _call({'action': 'newGame', 'level': level}));
+    return _stateFrom(
+      await _call({
+        'action': 'newGame',
+        'level': level,
+        'phone': Platform.isIOS || Platform.isAndroid,
+      }),
+    );
   }
 
   @override

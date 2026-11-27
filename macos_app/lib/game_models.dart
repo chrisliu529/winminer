@@ -1,4 +1,4 @@
-enum CellState { unknown, revealed, flag, exploded }
+enum CellState { unknown, revealed, flag, exploded, mine }
 
 enum GameStatus { playing, won, lost }
 
@@ -35,6 +35,7 @@ class GameCell {
       'revealed' => CellState.revealed,
       'flag' => CellState.flag,
       'exploded' => CellState.exploded,
+      'mine' => CellState.mine,
       final value => throw FormatException('Unknown cell state: $value'),
     };
     return GameCell(state: state, value: json['value'] as int?);

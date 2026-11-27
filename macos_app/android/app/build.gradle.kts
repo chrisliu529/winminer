@@ -49,7 +49,7 @@ flutter {
 
 val goSourceRoot = rootProject.projectDir.parentFile.parentFile
 val goLibrary = layout.buildDirectory.file("generated/go/arm64-v8a/libwinminer.so")
-val goJniLibsDirectory = layout.buildDirectory.dir("generated/jniLibs")
+val goJniLibsDirectory = layout.buildDirectory.dir("generated/winminerJniLibs")
 val goNdkVersion = flutter.ndkVersion
 val localProperties = Properties().apply {
     val propertiesFile = rootProject.file("local.properties")

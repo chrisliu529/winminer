@@ -66,6 +66,12 @@ flutter build ios --simulator
 
 Open `macos_app/ios/Runner.xcworkspace` in Xcode to select a simulator or configure signing for a physical device.
 
+On iOS and Android the app is named Minesweeper. It offers 8×8/10-mine and
+10×10/20-mine boards, guarantees the first reveal is safe, and shows all mines
+at the end. Tap to reveal, hold for 0.4 seconds to flag, or switch to flag mode.
+The timer starts with the first reveal and keeps running in the background.
+After five seconds without a manual move, a single-step solver becomes available.
+
 ## Web Game
 
 Start the local web server:
