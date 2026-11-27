@@ -55,6 +55,17 @@ flutter build apk --target-platform android-arm64
 
 The Gradle build compiles the Go game engine into an `arm64-v8a` shared library and packages it in the APK.
 
+## iOS App
+
+The Flutter iOS app links the Go game engine as an arm64 static library. With Xcode installed, build for the iOS Simulator with:
+
+```sh
+cd macos_app
+flutter build ios --simulator
+```
+
+Open `macos_app/ios/Runner.xcworkspace` in Xcode to select a simulator or configure signing for a physical device.
+
 ## Web Game
 
 Start the local web server:

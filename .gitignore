@@ -1,2 +1,4 @@
 *.png
 !/image/*.png
+!/macos_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/*.png
+!/macos_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/*.png

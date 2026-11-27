@@ -63,6 +63,58 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 
+  testWidgets('revealing a cell does not rebuild the status labels', (
+    tester,
+  ) async {
+    _mockWindowResizing();
+    addTearDown(_clearWindowResizingMock);
+    final api = _FakeGameApi();
+    await tester.pumpWidget(MaterialApp(home: GameScreen(api: api)));
+    await tester.pumpAndSettle();
+    final statusLabel = tester.widget<Text>(find.text('Playing'));
+
+    await tester.tap(find.byKey(const ValueKey('game-1-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+      identical(statusLabel, tester.widget<Text>(find.text('Playing'))),
+      isTrue,
+    );
+  });
+
+  testWidgets('keeps the minefield size stable through flags and game end', (
+    tester,
+  ) async {
+    _mockWindowResizing();
+    addTearDown(_clearWindowResizingMock);
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _FakeGameApi(
+      levels: const [GameLevel(level: 1, rows: 16, columns: 16, mines: 99)],
+      clickStatus: GameStatus.lost,
+    );
+    await tester.pumpWidget(MaterialApp(home: GameScreen(api: api)));
+    await tester.pumpAndSettle();
+    final frame = find.byKey(const ValueKey('minefield-frame'));
+    final board = find.byKey(const ValueKey('minefield-board'));
+    final initialFrameSize = tester.getSize(frame);
+    final initialBoardSize = tester.getSize(board);
+
+    await tester.longPress(find.byKey(const ValueKey('game-1-0')));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(frame), initialFrameSize);
+    expect(tester.getSize(board), initialBoardSize);
+
+    await tester.tap(find.byKey(const ValueKey('game-1-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Game over'), findsOneWidget);
+    expect(tester.getSize(frame), initialFrameSize);
+    expect(tester.getSize(board), initialBoardSize);
+  });
+
   testWidgets('shows a bomb icon for an exploded cell', (tester) async {
     _mockWindowResizing();
     addTearDown(_clearWindowResizingMock);

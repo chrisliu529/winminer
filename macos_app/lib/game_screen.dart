@@ -435,57 +435,118 @@ class _GameToolbar extends StatelessWidget {
   }
 }
 
-class _GameStatus extends StatelessWidget {
+class _GameStatus extends StatefulWidget {
   const _GameStatus({required this.controller});
 
   final GameController controller;
 
   @override
+  State<_GameStatus> createState() => _GameStatusState();
+}
+
+class _GameStatusState extends State<_GameStatus> {
+  GameSnapshot? _snapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshot = widget.controller.game;
+    widget.controller.gameState.addListener(_handleGameChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _GameStatus oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.gameState.removeListener(_handleGameChanged);
+    _snapshot = widget.controller.game;
+    widget.controller.gameState.addListener(_handleGameChanged);
+  }
+
+  void _handleGameChanged() {
+    final next = widget.controller.game;
+    final previous = _snapshot;
+    _snapshot = next;
+    if (!_sameSummary(previous, next) && mounted) setState(() {});
+  }
+
+  bool _sameSummary(GameSnapshot? first, GameSnapshot? second) {
+    if (first == null || second == null) return first == second;
+    return first.status == second.status &&
+        first.remainingMines == second.remainingMines &&
+        first.rows == second.rows &&
+        first.columns == second.columns &&
+        first.mines == second.mines;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.gameState.removeListener(_handleGameChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<GameSnapshot?>(
-      valueListenable: controller.gameState,
-      builder: (context, snapshot, _) {
-        if (snapshot == null) return const SizedBox.shrink();
-        final (label, icon, color) = switch (snapshot.status) {
-          GameStatus.playing => (
-            'Playing',
-            Icons.sports_esports_outlined,
-            Theme.of(context).colorScheme.primary,
-          ),
-          GameStatus.won => (
-            'You won!',
-            Icons.emoji_events_outlined,
-            Colors.green.shade700,
-          ),
-          GameStatus.lost => (
-            'Game over',
-            Icons.sentiment_dissatisfied_outlined,
-            Theme.of(context).colorScheme.error,
-          ),
-        };
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Wrap(
-              spacing: 28,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
+    final snapshot = _snapshot;
+    if (snapshot == null) return const SizedBox.shrink();
+    final (label, icon, color) = switch (snapshot.status) {
+      GameStatus.playing => (
+        'Playing',
+        Icons.sports_esports_outlined,
+        Theme.of(context).colorScheme.primary,
+      ),
+      GameStatus.won => (
+        'You won!',
+        Icons.emoji_events_outlined,
+        Colors.green.shade700,
+      ),
+      GameStatus.lost => (
+        'Game over',
+        Icons.sentiment_dissatisfied_outlined,
+        Theme.of(context).colorScheme.error,
+      ),
+    };
+    final status = _StatusItem(icon: icon, label: label, color: color);
+    final remaining = _StatusItem(
+      icon: Icons.flag_outlined,
+      label: '${snapshot.remainingMines} mines remaining',
+    );
+    final dimensions = _StatusItem(
+      icon: Icons.grid_on_outlined,
+      label: '${snapshot.rows}×${snapshot.columns} · ${snapshot.mines} mines',
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 600) {
+              return Wrap(
+                spacing: 28,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [status, remaining, dimensions],
+              );
+            }
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _StatusItem(icon: icon, label: label, color: color),
-                _StatusItem(
-                  icon: Icons.flag_outlined,
-                  label: '${snapshot.remainingMines} mines remaining',
+                Row(
+                  children: [
+                    Expanded(child: status),
+                    const SizedBox(width: 12),
+                    Expanded(child: remaining),
+                  ],
                 ),
-                _StatusItem(
-                  icon: Icons.grid_on_outlined,
-                  label:
-                      '${snapshot.rows}×${snapshot.columns} · ${snapshot.mines} mines',
-                ),
+                const SizedBox(height: 10),
+                dimensions,
               ],
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -552,6 +613,8 @@ class _StatusItem extends StatelessWidget {
         Flexible(
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall
                 ?.copyWith(color: color, fontWeight: FontWeight.w600),
           ),
@@ -604,6 +667,10 @@ class _MinefieldState extends State<_Minefield> {
   final List<ValueNotifier<GameCell>> _cells = [];
   bool _enabled = false;
   bool _loading = false;
+  Size? _cellSizeViewport;
+  Size? _cellSizeConstraints;
+  (int, int)? _cellSizeBoard;
+  double? _cachedCellSize;
 
   @override
   void initState() {
@@ -673,7 +740,46 @@ class _MinefieldState extends State<_Minefield> {
   }
 
   bool _canInteract(GameSnapshot? snapshot) =>
-      !widget.controller.controlsBusy && snapshot?.status == GameStatus.playing;
+      snapshot?.status == GameStatus.playing;
+
+  double _cellSizeFor(
+    BuildContext context,
+    BoxConstraints constraints,
+    GameSnapshot snapshot,
+  ) {
+    final viewport = MediaQuery.sizeOf(context);
+    final sizeConstraints = Size(constraints.maxWidth, constraints.maxHeight);
+    final board = (snapshot.rows, snapshot.columns);
+    if (_cachedCellSize != null &&
+        _cellSizeViewport == viewport &&
+        _cellSizeConstraints == sizeConstraints &&
+        _cellSizeBoard == board) {
+      return _cachedCellSize!;
+    }
+
+    _cellSizeViewport = viewport;
+    _cellSizeConstraints = sizeConstraints;
+    _cellSizeBoard = board;
+    _cachedCellSize = Platform.isAndroid
+        ? 32
+        : math
+              .min(
+                _Minefield._cellSize,
+                math.min(
+                  (constraints.maxWidth -
+                          2 * _GameScreenState._boardFrameInset -
+                          (snapshot.columns - 1) * _Minefield._spacing) /
+                      snapshot.columns,
+                  (constraints.maxHeight -
+                          2 * _GameScreenState._boardFrameInset -
+                          (snapshot.rows - 1) * _Minefield._spacing) /
+                      snapshot.rows,
+                ),
+              )
+              .clamp(1.0, _Minefield._cellSize)
+              .toDouble();
+    return _cachedCellSize!;
+  }
 
   bool _sameCell(GameCell first, GameCell second) =>
       first.state == second.state && first.value == second.value;
@@ -712,26 +818,7 @@ class _MinefieldState extends State<_Minefield> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final availableBoardWidth =
-            constraints.maxWidth - 2 * _GameScreenState._boardFrameInset;
-        final availableBoardHeight =
-            constraints.maxHeight - 2 * _GameScreenState._boardFrameInset;
-        final cellSize = Platform.isAndroid
-            ? 32.0
-            : math
-                  .min(
-                    _Minefield._cellSize,
-                    math.min(
-                      (availableBoardWidth -
-                              (snapshot.columns - 1) * _Minefield._spacing) /
-                          snapshot.columns,
-                      (availableBoardHeight -
-                              (snapshot.rows - 1) * _Minefield._spacing) /
-                          snapshot.rows,
-                    ),
-                  )
-                  .clamp(1.0, _Minefield._cellSize)
-                  .toDouble();
+        final cellSize = _cellSizeFor(context, constraints, snapshot);
         final boardWidth =
             snapshot.columns * cellSize +
             (snapshot.columns - 1) * _Minefield._spacing;
@@ -739,6 +826,7 @@ class _MinefieldState extends State<_Minefield> {
             snapshot.rows * cellSize +
             (snapshot.rows - 1) * _Minefield._spacing;
         return DecoratedBox(
+          key: const ValueKey('minefield-frame'),
           decoration: BoxDecoration(
             color: const Color(0xffb7c1ca),
             border: Border.all(color: const Color(0xff9ca8b3)),
@@ -759,6 +847,7 @@ class _MinefieldState extends State<_Minefield> {
                     ),
                     child: Center(
                       child: SizedBox(
+                        key: const ValueKey('minefield-board'),
                         width: boardWidth,
                         height: boardHeight,
                         child: GridView.builder(

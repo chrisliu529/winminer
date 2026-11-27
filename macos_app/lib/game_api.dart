@@ -17,20 +17,10 @@ abstract interface class GameApi {
 }
 
 class GoGameApi implements GameApi {
-  String get _libraryPath {
-    if (Platform.isAndroid) return 'libwinminer.so';
-    if (!Platform.isMacOS) {
-      throw UnsupportedError('GoGameApi is unavailable on this platform');
-    }
-    final executableDirectory = File(Platform.resolvedExecutable).parent.path;
-    return '$executableDirectory/../Frameworks/libwinminer.dylib';
-  }
-
   Future<Map<String, dynamic>> _call(Map<String, Object?> request) async {
-    final libraryPath = _libraryPath;
     final payload = jsonEncode(request);
     final response = await Isolate.run<String>(
-      () => _invokeGo(libraryPath, payload),
+      () => _invokeGo(payload),
     );
     final decoded = jsonDecode(response);
     if (decoded is! Map) {
@@ -97,6 +87,18 @@ class GoGameApi implements GameApi {
   }
 }
 
+DynamicLibrary _openGoLibrary() {
+  if (Platform.isIOS) return DynamicLibrary.process();
+  if (Platform.isAndroid) return DynamicLibrary.open('libwinminer.so');
+  if (!Platform.isMacOS) {
+    throw UnsupportedError('GoGameApi is unavailable on this platform');
+  }
+  final executableDirectory = File(Platform.resolvedExecutable).parent.path;
+  return DynamicLibrary.open(
+    '$executableDirectory/../Frameworks/libwinminer.dylib',
+  );
+}
+
 class GoGameException implements Exception {
   const GoGameException(this.message);
 
@@ -111,8 +113,8 @@ typedef _DartCall = Pointer<Utf8> Function(Pointer<Utf8>);
 typedef _NativeFree = Void Function(Pointer<Utf8>);
 typedef _DartFree = void Function(Pointer<Utf8>);
 
-String _invokeGo(String libraryPath, String request) {
-  final library = DynamicLibrary.open(libraryPath);
+String _invokeGo(String request) {
+  final library = _openGoLibrary();
   final call = library.lookupFunction<_NativeCall, _DartCall>('WinminerCall');
   final free = library.lookupFunction<_NativeFree, _DartFree>('WinminerFree');
   final input = request.toNativeUtf8();
