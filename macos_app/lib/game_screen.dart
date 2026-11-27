@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
@@ -46,7 +47,13 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = GameController(widget.api);
+    _controller.gameState.addListener(_handleGameChanged);
     unawaited(_controller.initialize());
+  }
+
+  void _handleGameChanged() {
+    final game = _controller.game;
+    if (game != null) _scheduleWindowResize(game);
   }
 
   @override
@@ -61,85 +68,59 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _controller.gameState.removeListener(_handleGameChanged);
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final game = _controller.game;
-        if (game != null) _scheduleWindowResize(game);
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Winminer'),
-            backgroundColor: Theme.of(context).colorScheme.surface,
-          ),
-          body: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _GameToolbar(controller: _controller),
-                      if (_controller.errorMessage != null) ...[
-                        const SizedBox(height: 12),
-                        _ErrorBanner(message: _controller.errorMessage!),
-                      ],
-                      if (_windowResizeError != null) ...[
-                        const SizedBox(height: 12),
-                        _ErrorBanner(message: _windowResizeError!),
-                      ],
-                      if (game == null) ...[
-                        const Spacer(),
-                        if (_controller.busy)
-                          const Center(child: CircularProgressIndicator())
-                        else
-                          const Center(child: Text('Unable to start a game.')),
-                        const Spacer(),
-                      ] else ...[
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Winminer'),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Padding(
+              padding: MediaQuery.sizeOf(context).width < 600
+                  ? const EdgeInsets.fromLTRB(12, 12, 12, 16)
+                  : const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _GameToolbar(controller: _controller),
+                  _ControllerErrorBanner(controller: _controller),
+                  if (_windowResizeError != null) ...[
+                    const SizedBox(height: 12),
+                    _ErrorBanner(message: _windowResizeError!),
+                  ],
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _GameStatus(controller: _controller),
                         const SizedBox(height: 16),
-                        _GameStatus(snapshot: game),
-                        const SizedBox(height: 16),
-                        Expanded(
-                          child: _Minefield(
-                            snapshot: game,
-                            enabled:
-                                !_controller.busy &&
-                                game.status == GameStatus.playing,
-                            onClick: _controller.click,
-                            onFlag: _controller.toggleFlag,
-                          ),
-                        ),
+                        Expanded(child: _Minefield(controller: _controller)),
                         const SizedBox(height: 10),
-                        Text(
-                          'Click to reveal · Right-click or long-press to flag',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
-                              ),
-                        ),
+                        _GameHint(controller: _controller),
                       ],
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
   void _scheduleWindowResize(GameSnapshot game) {
+    if (!Platform.isMacOS) return;
     if (_windowRows == game.rows && _windowColumns == game.columns) return;
     _windowRows = game.rows;
     _windowColumns = game.columns;
@@ -193,122 +174,193 @@ class _GameToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    GameLevel? selectedLevel;
-    for (final level in controller.levels) {
-      if (level.level == controller.selectedLevel) {
-        selectedLevel = level;
-        break;
-      }
-    }
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        SizedBox(
-          width: 310,
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Level',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: selectedLevel?.level,
-                isExpanded: true,
-                items: controller.levels.map((level) {
-                  return DropdownMenuItem(
-                    value: level.level,
-                    child: Text(
-                      'Level ${level.level} · ${level.rows}×${level.columns} · ${level.mines} mines',
-                      overflow: TextOverflow.ellipsis,
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        GameLevel? selectedLevel;
+        for (final level in controller.levels) {
+          if (level.level == controller.selectedLevel) {
+            selectedLevel = level;
+            break;
+          }
+        }
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: math.min(310.0, constraints.maxWidth).toDouble(),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Level',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                     ),
-                  );
-                }).toList(),
-                onChanged: controller.busy
-                    ? null
-                    : (level) {
-                        if (level != null) controller.selectLevel(level);
-                      },
-              ),
-            ),
-          ),
-        ),
-        FilledButton.icon(
-          onPressed: controller.busy || controller.levels.isEmpty
-              ? null
-              : controller.newGame,
-          icon: const Icon(Icons.refresh),
-          label: const Text('New game'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed:
-              controller.busy || controller.game?.status != GameStatus.playing
-              ? null
-              : controller.botStep,
-          icon: const Icon(Icons.auto_awesome),
-          label: const Text('Bot step'),
-        ),
-        OutlinedButton.icon(
-          onPressed: controller.autoPlaying
-              ? controller.toggleAutoPlay
-              : controller.busy || controller.game?.status != GameStatus.playing
-              ? null
-              : controller.toggleAutoPlay,
-          icon: Icon(controller.autoPlaying ? Icons.pause : Icons.play_arrow),
-          label: Text(controller.autoPlaying ? 'Pause' : 'Auto play'),
-        ),
-      ],
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: selectedLevel?.level,
+                        isExpanded: true,
+                        items: controller.levels.map((level) {
+                          return DropdownMenuItem(
+                            value: level.level,
+                            child: Text(
+                              'Level ${level.level} · ${level.rows}×${level.columns} · ${level.mines} mines',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: controller.controlsBusy
+                            ? null
+                            : (level) {
+                                if (level != null) {
+                                  controller.selectLevel(level);
+                                }
+                              },
+                      ),
+                    ),
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed:
+                      controller.controlsBusy || controller.levels.isEmpty
+                      ? null
+                      : controller.newGame,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('New game'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed:
+                      controller.controlsBusy ||
+                          controller.autoPlaying ||
+                          controller.game?.status != GameStatus.playing
+                      ? null
+                      : () => controller.botStep(),
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('Bot step'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.autoPlaying
+                      ? controller.toggleAutoPlay
+                      : controller.controlsBusy ||
+                            controller.game?.status != GameStatus.playing
+                      ? null
+                      : controller.toggleAutoPlay,
+                  icon: Icon(
+                    controller.autoPlaying ? Icons.pause : Icons.play_arrow,
+                  ),
+                  label: Text(controller.autoPlaying ? 'Pause' : 'Auto play'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
 
 class _GameStatus extends StatelessWidget {
-  const _GameStatus({required this.snapshot});
+  const _GameStatus({required this.controller});
 
-  final GameSnapshot snapshot;
+  final GameController controller;
 
   @override
   Widget build(BuildContext context) {
-    final (label, icon, color) = switch (snapshot.status) {
-      GameStatus.playing => (
-        'Playing',
-        Icons.sports_esports_outlined,
-        Theme.of(context).colorScheme.primary,
-      ),
-      GameStatus.won => (
-        'You won!',
-        Icons.emoji_events_outlined,
-        Colors.green.shade700,
-      ),
-      GameStatus.lost => (
-        'Game over',
-        Icons.sentiment_dissatisfied_outlined,
-        Theme.of(context).colorScheme.error,
-      ),
-    };
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Wrap(
-          spacing: 28,
-          runSpacing: 10,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _StatusItem(icon: icon, label: label, color: color),
-            _StatusItem(
-              icon: Icons.flag_outlined,
-              label: '${snapshot.remainingMines} mines remaining',
+    return ValueListenableBuilder<GameSnapshot?>(
+      valueListenable: controller.gameState,
+      builder: (context, snapshot, _) {
+        if (snapshot == null) return const SizedBox.shrink();
+        final (label, icon, color) = switch (snapshot.status) {
+          GameStatus.playing => (
+            'Playing',
+            Icons.sports_esports_outlined,
+            Theme.of(context).colorScheme.primary,
+          ),
+          GameStatus.won => (
+            'You won!',
+            Icons.emoji_events_outlined,
+            Colors.green.shade700,
+          ),
+          GameStatus.lost => (
+            'Game over',
+            Icons.sentiment_dissatisfied_outlined,
+            Theme.of(context).colorScheme.error,
+          ),
+        };
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Wrap(
+              spacing: 28,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _StatusItem(icon: icon, label: label, color: color),
+                _StatusItem(
+                  icon: Icons.flag_outlined,
+                  label: '${snapshot.remainingMines} mines remaining',
+                ),
+                _StatusItem(
+                  icon: Icons.grid_on_outlined,
+                  label:
+                      '${snapshot.rows}×${snapshot.columns} · ${snapshot.mines} mines',
+                ),
+              ],
             ),
-            _StatusItem(
-              icon: Icons.grid_on_outlined,
-              label:
-                  '${snapshot.rows}×${snapshot.columns} · ${snapshot.mines} mines',
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ControllerErrorBanner extends StatelessWidget {
+  const _ControllerErrorBanner({required this.controller});
+
+  final GameController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final error = controller.errorMessage;
+        if (error == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: _ErrorBanner(message: error),
+        );
+      },
+    );
+  }
+}
+
+class _GameHint extends StatelessWidget {
+  const _GameHint({required this.controller});
+
+  final GameController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = Text(
+      Platform.isAndroid
+          ? 'Tap to reveal · Long-press to flag'
+          : 'Click to reveal · Right-click or long-press to flag',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+    );
+    return ValueListenableBuilder<GameSnapshot?>(
+      valueListenable: controller.gameState,
+      child: hint,
+      builder: (context, game, child) =>
+          game == null ? const SizedBox.shrink() : child!,
     );
   }
 }
@@ -327,10 +379,12 @@ class _StatusItem extends StatelessWidget {
       children: [
         Icon(icon, size: 19, color: color),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleSmall
-              ?.copyWith(color: color, fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: color, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );
@@ -364,46 +418,156 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _Minefield extends StatelessWidget {
-  const _Minefield({
-    required this.snapshot,
-    required this.enabled,
-    required this.onClick,
-    required this.onFlag,
-  });
+class _Minefield extends StatefulWidget {
+  const _Minefield({required this.controller});
 
+  final GameController controller;
   static const double _cellSize = 34;
   static const double _spacing = 2;
 
-  final GameSnapshot snapshot;
-  final bool enabled;
-  final Future<void> Function(int x, int y) onClick;
-  final Future<void> Function(int x, int y) onFlag;
+  @override
+  State<_Minefield> createState() => _MinefieldState();
+}
+
+class _MinefieldState extends State<_Minefield> {
+  GameSnapshot? _snapshot;
+  final List<ValueNotifier<GameCell>> _cells = [];
+  bool _enabled = false;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshot = widget.controller.game;
+    _loading = widget.controller.busy;
+    _enabled = _canInteract(_snapshot);
+    _replaceCells(_snapshot);
+    widget.controller.gameState.addListener(_handleGameChanged);
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Minefield oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.gameState.removeListener(_handleGameChanged);
+    oldWidget.controller.removeListener(_handleControllerChanged);
+    _disposeCells();
+    _snapshot = widget.controller.game;
+    _loading = widget.controller.busy;
+    _enabled = _canInteract(_snapshot);
+    _replaceCells(_snapshot);
+    widget.controller.gameState.addListener(_handleGameChanged);
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  void _handleGameChanged() {
+    final next = widget.controller.gameState.value;
+    final previous = _snapshot;
+    final boardChanged =
+        next == null ||
+        previous == null ||
+        next.id != previous.id ||
+        next.rows != previous.rows ||
+        next.columns != previous.columns ||
+        next.cells.length != _cells.length;
+
+    _snapshot = next;
+    if (boardChanged) {
+      _replaceCells(next);
+    } else {
+      for (var index = 0; index < next.cells.length; index++) {
+        final nextCell = next.cells[index];
+        if (!_sameCell(_cells[index].value, nextCell)) {
+          _cells[index].value = nextCell;
+        }
+      }
+    }
+
+    final enabled = _canInteract(next);
+    if (mounted && (boardChanged || enabled != _enabled)) {
+      setState(() => _enabled = enabled);
+    } else {
+      _enabled = enabled;
+    }
+  }
+
+  void _handleControllerChanged() {
+    final enabled = _canInteract(_snapshot);
+    final loading = _snapshot == null && widget.controller.busy;
+    if (enabled == _enabled && loading == _loading) return;
+    setState(() {
+      _enabled = enabled;
+      _loading = loading;
+    });
+  }
+
+  bool _canInteract(GameSnapshot? snapshot) =>
+      !widget.controller.controlsBusy && snapshot?.status == GameStatus.playing;
+
+  bool _sameCell(GameCell first, GameCell second) =>
+      first.state == second.state && first.value == second.value;
+
+  void _replaceCells(GameSnapshot? snapshot) {
+    _disposeCells();
+    if (snapshot != null) {
+      _cells.addAll(snapshot.cells.map(ValueNotifier.new));
+    }
+  }
+
+  void _disposeCells() {
+    for (final cell in _cells) {
+      cell.dispose();
+    }
+    _cells.clear();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.gameState.removeListener(_handleGameChanged);
+    widget.controller.removeListener(_handleControllerChanged);
+    _disposeCells();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final snapshot = _snapshot;
+    if (snapshot == null) {
+      return Center(
+        child: _loading
+            ? const CircularProgressIndicator()
+            : const Text('Unable to start a game.'),
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableBoardWidth =
             constraints.maxWidth - 2 * _GameScreenState._boardFrameInset;
         final availableBoardHeight =
             constraints.maxHeight - 2 * _GameScreenState._boardFrameInset;
-        final cellSize = math
-            .min(
-              _cellSize,
-              math.min(
-                (availableBoardWidth - (snapshot.columns - 1) * _spacing) /
-                    snapshot.columns,
-                (availableBoardHeight - (snapshot.rows - 1) * _spacing) /
-                    snapshot.rows,
-              ),
-            )
-            .clamp(1.0, _cellSize)
-            .toDouble();
+        final cellSize = Platform.isAndroid
+            ? 32.0
+            : math
+                  .min(
+                    _Minefield._cellSize,
+                    math.min(
+                      (availableBoardWidth -
+                              (snapshot.columns - 1) * _Minefield._spacing) /
+                          snapshot.columns,
+                      (availableBoardHeight -
+                              (snapshot.rows - 1) * _Minefield._spacing) /
+                          snapshot.rows,
+                    ),
+                  )
+                  .clamp(1.0, _Minefield._cellSize)
+                  .toDouble();
         final boardWidth =
-            snapshot.columns * cellSize + (snapshot.columns - 1) * _spacing;
+            snapshot.columns * cellSize +
+            (snapshot.columns - 1) * _Minefield._spacing;
         final boardHeight =
-            snapshot.rows * cellSize + (snapshot.rows - 1) * _spacing;
+            snapshot.rows * cellSize +
+            (snapshot.rows - 1) * _Minefield._spacing;
         return DecoratedBox(
           decoration: BoxDecoration(
             color: const Color(0xffb7c1ca),
@@ -434,21 +598,25 @@ class _Minefield extends StatelessWidget {
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: snapshot.columns,
-                                crossAxisSpacing: _spacing,
-                                mainAxisSpacing: _spacing,
+                                crossAxisSpacing: _Minefield._spacing,
+                                mainAxisSpacing: _Minefield._spacing,
                               ),
                           itemBuilder: (context, index) {
                             final x = index % snapshot.columns;
                             final y = index ~/ snapshot.columns;
-                            return _MineCell(
+                            return ValueListenableBuilder<GameCell>(
                               key: ValueKey('${snapshot.id}-$index'),
-                              cell: snapshot.cells[index],
-                              x: x,
-                              y: y,
-                              cellSize: cellSize,
-                              enabled: enabled,
-                              onClick: () => onClick(x, y),
-                              onFlag: () => onFlag(x, y),
+                              valueListenable: _cells[index],
+                              builder: (context, cell, _) => _MineCell(
+                                cell: cell,
+                                x: x,
+                                y: y,
+                                cellSize: cellSize,
+                                enabled: _enabled,
+                                onClick: () => widget.controller.click(x, y),
+                                onFlag: () =>
+                                    widget.controller.toggleFlag(x, y),
+                              ),
                             );
                           },
                         ),
@@ -467,7 +635,6 @@ class _Minefield extends StatelessWidget {
 
 class _MineCell extends StatelessWidget {
   const _MineCell({
-    super.key,
     required this.cell,
     required this.x,
     required this.y,

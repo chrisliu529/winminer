@@ -44,6 +44,17 @@ flutter run -d macos
 The Xcode build phase compiles the arm64 Go library and bundles it into the app. The Flutter UI receives only the visible game snapshot; mine positions and the random seed remain inside Go.
 The macOS window resizes to fit the active board, and board tiles use square corners.
 
+## Android App
+
+The Flutter app also supports Android arm64. Install the Android SDK and NDK, then build the APK with:
+
+```sh
+cd macos_app
+flutter build apk --target-platform android-arm64
+```
+
+The Gradle build compiles the Go game engine into an `arm64-v8a` shared library and packages it in the APK.
+
 ## Web Game
 
 Start the local web server:

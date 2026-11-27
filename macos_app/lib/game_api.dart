@@ -18,6 +18,10 @@ abstract interface class GameApi {
 
 class GoGameApi implements GameApi {
   String get _libraryPath {
+    if (Platform.isAndroid) return 'libwinminer.so';
+    if (!Platform.isMacOS) {
+      throw UnsupportedError('GoGameApi is unavailable on this platform');
+    }
     final executableDirectory = File(Platform.resolvedExecutable).parent.path;
     return '$executableDirectory/../Frameworks/libwinminer.dylib';
   }

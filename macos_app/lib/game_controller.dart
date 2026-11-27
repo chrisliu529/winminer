@@ -9,15 +9,20 @@ class GameController extends ChangeNotifier {
   GameController(this._api);
 
   final GameApi _api;
+  final ValueNotifier<GameSnapshot?> _gameState = ValueNotifier(null);
   final List<GameLevel> levels = [];
-  GameSnapshot? game;
   int selectedLevel = 1;
   bool busy = false;
   bool autoPlaying = false;
   String? errorMessage;
 
+  ValueListenable<GameSnapshot?> get gameState => _gameState;
+  GameSnapshot? get game => _gameState.value;
+  bool get controlsBusy => busy && !_automatedStep;
+
   Timer? _autoTimer;
   int _autoRun = 0;
+  bool _automatedStep = false;
 
   Future<void> initialize() async {
     if (busy || levels.isNotEmpty) return;
@@ -31,7 +36,7 @@ class GameController extends ChangeNotifier {
         throw StateError('No game levels are configured');
       }
       selectedLevel = levels.first.level;
-      game = await _api.newGame(selectedLevel);
+      _gameState.value = await _api.newGame(selectedLevel);
     } catch (error) {
       errorMessage = error.toString();
     } finally {
@@ -53,7 +58,7 @@ class GameController extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
     try {
-      game = await _api.newGame(selectedLevel);
+      _gameState.value = await _api.newGame(selectedLevel);
       if (oldGameId != null) {
         await _api.deleteGame(oldGameId);
       }
@@ -77,10 +82,10 @@ class GameController extends ChangeNotifier {
     await _runAction(() => _api.toggleFlag(current.id, x, y));
   }
 
-  Future<void> botStep() async {
+  Future<void> botStep({bool automated = false}) async {
     final current = game;
     if (current == null || current.status != GameStatus.playing) return;
-    await _runAction(() => _api.botStep(current.id));
+    await _runAction(() => _api.botStep(current.id), automated: automated);
   }
 
   void toggleAutoPlay() {
@@ -105,7 +110,7 @@ class GameController extends ChangeNotifier {
 
   Future<void> _autoStep(int run) async {
     if (!autoPlaying || run != _autoRun) return;
-    await botStep();
+    await botStep(automated: true);
     if (run != _autoRun || !autoPlaying) return;
     if (errorMessage != null || game?.status != GameStatus.playing) {
       _stopAutoPlay();
@@ -118,18 +123,24 @@ class GameController extends ChangeNotifier {
     );
   }
 
-  Future<void> _runAction(Future<GameSnapshot> Function() action) async {
+  Future<void> _runAction(
+    Future<GameSnapshot> Function() action, {
+    bool automated = false,
+  }) async {
     if (busy) return;
     busy = true;
+    _automatedStep = automated;
     errorMessage = null;
-    notifyListeners();
+    if (!automated) notifyListeners();
     try {
-      game = await action();
+      _gameState.value = await action();
     } catch (error) {
       errorMessage = error.toString();
+      notifyListeners();
     } finally {
       busy = false;
-      notifyListeners();
+      _automatedStep = false;
+      if (!automated) notifyListeners();
     }
   }
 
@@ -143,6 +154,7 @@ class GameController extends ChangeNotifier {
   @override
   void dispose() {
     _stopAutoPlay();
+    _gameState.dispose();
     super.dispose();
   }
 }

@@ -1,5 +1,5 @@
 name: winminer_app
-description: Winminer Minesweeper bot for macOS.
+description: Winminer Minesweeper bot for macOS and Android.
 publish_to: 'none'
 version: 1.0.0+1
 

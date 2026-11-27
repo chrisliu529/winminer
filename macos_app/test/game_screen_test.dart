@@ -2,12 +2,34 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:winminer_app/game_api.dart';
+import 'package:winminer_app/game_controller.dart';
 import 'package:winminer_app/game_models.dart';
 import 'package:winminer_app/game_screen.dart';
 
 const _windowChannel = MethodChannel('winminer/window');
 
 void main() {
+  test(
+    'automatic steps publish game changes without control notifications',
+    () async {
+      final controller = GameController(_FakeGameApi());
+      await controller.initialize();
+      var controlUpdates = 0;
+      var gameUpdates = 0;
+      controller.addListener(() => controlUpdates++);
+      controller.gameState.addListener(() => gameUpdates++);
+
+      controller.toggleAutoPlay();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(gameUpdates, 1);
+      expect(controlUpdates, 1);
+      controller.pauseAutoPlay();
+      expect(controlUpdates, 2);
+      controller.dispose();
+    },
+  );
+
   testWidgets('renders the game and sends board actions to the API', (
     tester,
   ) async {
@@ -72,6 +94,25 @@ void main() {
     );
     expect(secondSize['width'], greaterThan(firstSize['width']!));
     expect(secondSize['height'], greaterThan(firstSize['height']!));
+  });
+
+  testWidgets('lays out controls on a narrow phone-sized viewport', (
+    tester,
+  ) async {
+    _mockWindowResizing();
+    addTearDown(_clearWindowResizingMock);
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(MaterialApp(home: GameScreen(api: _FakeGameApi())));
+    await tester.pumpAndSettle();
+
+    final exception = tester.takeException();
+    expect(exception, isNull);
+    expect(find.text('New game'), findsOneWidget);
+    expect(find.byKey(const ValueKey('game-1-0')), findsOneWidget);
   });
 }
 
