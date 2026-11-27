@@ -31,6 +31,19 @@ BENCH_WORKERS=1 WINMINER_BINARY=./target/release/winminer-rust python3 bench.py
 
 `BENCH_WORKERS=1` runs configurations sequentially to reduce timing noise. `WINMINER_BINARY` selects the executable; it defaults to `./winminer`.
 
+## macOS App
+
+The Flutter macOS app embeds the Go game engine as a native library and communicates with it through a JSON C ABI. Build and run it with:
+
+```sh
+cd macos_app
+flutter pub get
+flutter run -d macos
+```
+
+The Xcode build phase compiles the arm64 Go library and bundles it into the app. The Flutter UI receives only the visible game snapshot; mine positions and the random seed remain inside Go.
+The macOS window resizes to fit the active board, and board tiles use square corners.
+
 ## Web Game
 
 Start the local web server:

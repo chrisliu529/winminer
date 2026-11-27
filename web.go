@@ -129,30 +129,13 @@ func (s *webServer) handleCreateGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var idBytes [16]byte
-	if _, err := rand.Read(idBytes[:]); err != nil {
-		writeWebError(w, http.StatusInternalServerError, err)
-		return
-	}
-	id := hex.EncodeToString(idBytes[:])
-
-	var seedBytes [8]byte
-	if _, err := rand.Read(seedBytes[:]); err != nil {
-		writeWebError(w, http.StatusInternalServerError, err)
-		return
-	}
-	var seed int64
-	for i, b := range seedBytes {
-		seed |= int64(b) << (8 * i)
-	}
-
-	game, err := newWebGame(id, request.Level, seed)
+	game, err := newRandomWebGame(request.Level)
 	if err != nil {
 		writeWebError(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.mu.Lock()
-	s.games[id] = game
+	s.games[game.id] = game
 	s.mu.Unlock()
 	writeJSON(w, http.StatusCreated, map[string]gameSnapshot{"state": game.snapshot()})
 }
@@ -234,6 +217,25 @@ func (s *webServer) handleGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]gameSnapshot{"state": game.snapshotLocked()})
+}
+
+func newRandomWebGame(level int) (*webGame, error) {
+	if level < 1 || level > len(config.Levels) {
+		return nil, errors.New("invalid level")
+	}
+	var idBytes [16]byte
+	if _, err := rand.Read(idBytes[:]); err != nil {
+		return nil, err
+	}
+	var seedBytes [8]byte
+	if _, err := rand.Read(seedBytes[:]); err != nil {
+		return nil, err
+	}
+	var seed int64
+	for i, b := range seedBytes {
+		seed |= int64(b) << (8 * i)
+	}
+	return newWebGame(hex.EncodeToString(idBytes[:]), level, seed)
 }
 
 func newWebGame(id string, level int, seed int64) (*webGame, error) {
