@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'game_controller.dart';
 import 'game_models.dart';
@@ -25,8 +27,16 @@ class MobileGameScreen extends StatefulWidget {
 
 class _MobileGameScreenState extends State<MobileGameScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  static const _levelNames = ['初级', '中级', '高级'];
+  static String _bestTimeKey(int level) => 'mobile.best_time.v1.$level';
+
   final ValueNotifier<int> _elapsed = ValueNotifier(0);
   final ValueNotifier<(int, GameStatus)?> _summary = ValueNotifier(null);
+  final Map<int, int> _bestTimes = {};
+  SharedPreferencesAsync? _preferences;
+  late Future<void> _bestTimesTask;
+  bool _loadingBestTimes = true;
+  bool _bestTimesUnavailable = false;
   Timer? _clock;
   Timer? _idleTimer;
   DateTime? _startedAt;
@@ -52,6 +62,72 @@ class _MobileGameScreenState extends State<MobileGameScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.controller.gameState.addListener(_gameChanged);
     _gameChanged();
+    _bestTimesTask = _loadBestTimes();
+  }
+
+  Future<void> _loadBestTimes() async {
+    try {
+      final preferences = SharedPreferencesAsync();
+      final values = await preferences.getAll(
+        allowList: {
+          for (var level = 1; level <= _levelNames.length; level++)
+            _bestTimeKey(level),
+        },
+      );
+      final loaded = <int, int>{};
+      for (var level = 1; level <= _levelNames.length; level++) {
+        final value = values[_bestTimeKey(level)];
+        if (value != null) {
+          if (value is! int || value < 0) {
+            throw FormatException('Invalid best time for level $level');
+          }
+          loaded[level] = value;
+        }
+      }
+      _bestTimes.addAll(loaded);
+      _preferences = preferences;
+    } on PlatformException catch (error) {
+      _reportBestTimeError(error, unavailable: true);
+    } on MissingPluginException catch (error) {
+      _reportBestTimeError(error, unavailable: true);
+    } on StateError catch (error) {
+      _reportBestTimeError(error, unavailable: true);
+    } on FormatException catch (error) {
+      _reportBestTimeError(error, unavailable: true);
+    } finally {
+      _loadingBestTimes = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _recordBestTime(int level, int seconds) {
+    _bestTimesTask = _bestTimesTask.then((_) async {
+      final preferences = _preferences;
+      if (preferences == null) return;
+      final previous = _bestTimes[level];
+      if (previous != null && previous <= seconds) return;
+      try {
+        await preferences.setInt(_bestTimeKey(level), seconds);
+        _bestTimes[level] = seconds;
+        if (mounted) setState(() {});
+      } on PlatformException catch (error) {
+        _reportBestTimeError(error);
+      } on MissingPluginException catch (error) {
+        _reportBestTimeError(error);
+      } on StateError catch (error) {
+        _reportBestTimeError(error);
+      }
+    });
+  }
+
+  void _reportBestTimeError(Object error, {bool unavailable = false}) {
+    if (unavailable) _bestTimesUnavailable = true;
+    debugPrint('Unable to store best times: $error');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text('无法保存或读取最佳成绩：$error')));
+    });
   }
 
   void _gameChanged() {
@@ -136,6 +212,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
     }
     _clearHighlight();
     final actionTime = _now;
+    final level = controller.selectedLevel;
     if (flag) {
       await controller.toggleFlag(x, y);
     } else {
@@ -158,6 +235,10 @@ class _MobileGameScreenState extends State<MobileGameScreen>
           (_) => _updateElapsed(),
         );
       }
+    }
+    if (after.status == GameStatus.won && _startedAt != null) {
+      _updateElapsed();
+      _recordBestTime(level, _elapsed.value);
     }
     if (after.status == GameStatus.playing) _scheduleSolver();
   }
@@ -217,6 +298,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                   valueListenable: _summary,
                   builder: (context, summary, _) => Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _Led(value: summary?.$1 ?? 0),
                       _BevelButton(
@@ -234,10 +316,43 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                           ),
                         ),
                       ),
-                      ValueListenableBuilder<int>(
-                        valueListenable: _elapsed,
-                        builder: (context, seconds, _) =>
-                            _Led(key: const ValueKey('timer'), value: seconds),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ValueListenableBuilder<int>(
+                            valueListenable: _elapsed,
+                            builder: (context, seconds, _) => _Led(
+                              key: const ValueKey('timer'),
+                              value: seconds,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          AnimatedBuilder(
+                            animation: widget.controller,
+                            builder: (context, _) {
+                              final best =
+                                  _bestTimes[widget.controller.selectedLevel];
+                              final value = _loadingBestTimes
+                                  ? '读取中'
+                                  : _bestTimesUnavailable
+                                  ? '不可用'
+                                  : best == null
+                                  ? '--'
+                                  : '$best 秒';
+                              return SizedBox(
+                                width: 76,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '最佳：$value',
+                                    key: const ValueKey('best-time'),
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -267,7 +382,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                   animation: widget.controller,
                   builder: (context, _) => Row(
                     children: [
-                      for (final (index, label) in ['初级', '中级', '高级'].indexed)
+                      for (final (index, label) in _levelNames.indexed)
                         Padding(
                           padding: const EdgeInsets.only(right: 2),
                           child: _BevelButton(
@@ -294,7 +409,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                                       GameStatus.playing
                               ? null
                               : _solve,
-                          child: const Text('求解'),
+                          child: const Text('提示'),
                         )
                       else
                         const SizedBox(width: 48),

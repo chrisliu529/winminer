@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
+import 'package:shared_preferences_platform_interface/types.dart';
 import 'package:winminer_app/game_api.dart';
 import 'package:winminer_app/game_controller.dart';
 import 'package:winminer_app/game_models.dart';
@@ -13,6 +18,11 @@ import 'package:winminer_app/mobile_game_screen.dart';
 const _windowChannel = MethodChannel('winminer/window');
 
 void main() {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
+
   testWidgets('action sounds are PCM WAVs at matching levels', (tester) async {
     final levels = <double>[];
     for (final sound in ActionSound.values) {
@@ -378,6 +388,7 @@ void main() {
     expect(find.byKey(const ValueKey('bot-step')), findsNothing);
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const ValueKey('bot-step')), findsOneWidget);
+    expect(find.text('提示'), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('flag-mode'))).dx -
           tester.getTopRight(find.byKey(const ValueKey('bot-step'))).dx,
@@ -522,6 +533,201 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('phone stores the fastest win independently per difficulty', (
+    tester,
+  ) async {
+    final api = _FakeGameApi(
+      levels: const [
+        GameLevel(level: 1, rows: 2, columns: 2, mines: 1),
+        GameLevel(level: 2, rows: 2, columns: 2, mines: 1),
+        GameLevel(level: 3, rows: 2, columns: 2, mines: 1),
+      ],
+    );
+    var now = DateTime(2026, 1, 1);
+    var controller = GameController(api);
+    await controller.initialize();
+
+    Future<void> showScreen() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MobileGameScreen(
+              controller: controller,
+              onActionSound: (_) {},
+              now: () => now,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> finish(int seconds, GameStatus status) async {
+      final id = controller.game!.id;
+      api.clickStatus = null;
+      await tester.tap(find.byKey(ValueKey('$id-0')));
+      await tester.pump();
+      now = now.add(Duration(seconds: seconds));
+      api.clickStatus = status;
+      await tester.tap(find.byKey(ValueKey('$id-1')));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    Future<void> restart() async {
+      await tester.tap(find.byKey(const ValueKey('restart')));
+      await tester.pump();
+    }
+
+    String best() =>
+        tester.widget<Text>(find.byKey(const ValueKey('best-time'))).data!;
+
+    await showScreen();
+    expect(best(), '最佳：--');
+    final timer = find.byKey(const ValueKey('timer'));
+    final bestTime = find.byKey(const ValueKey('best-time'));
+    expect(
+      tester.getCenter(bestTime).dx,
+      closeTo(tester.getCenter(timer).dx, 1),
+    );
+    expect(
+      tester.getTopLeft(bestTime).dy - tester.getBottomLeft(timer).dy,
+      inInclusiveRange(0, 4),
+    );
+
+    await finish(25, GameStatus.won);
+    expect(best(), '最佳：25 秒');
+    expect(await SharedPreferencesAsync().getInt('mobile.best_time.v1.1'), 25);
+    await restart();
+    await finish(3, GameStatus.lost);
+    expect(best(), '最佳：25 秒');
+    await restart();
+    await finish(50, GameStatus.won);
+    expect(best(), '最佳：25 秒');
+    await restart();
+    await finish(7, GameStatus.won);
+    expect(best(), '最佳：7 秒');
+
+    await tester.tap(find.byKey(const ValueKey('level-2')));
+    await tester.pump();
+    expect(best(), '最佳：--');
+    await finish(1002, GameStatus.won);
+    expect(best(), '最佳：1002 秒');
+
+    await tester.tap(find.byKey(const ValueKey('level-3')));
+    await tester.pump();
+    api.clickStatus = GameStatus.won;
+    await tester.tap(find.byKey(ValueKey('${controller.game!.id}-0')));
+    await tester.pump();
+    await tester.pump();
+    expect(best(), '最佳：0 秒');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    controller = GameController(api);
+    await controller.initialize();
+    await showScreen();
+    expect(best(), '最佳：7 秒');
+    await tester.tap(find.byKey(const ValueKey('level-2')));
+    await tester.pump();
+    expect(best(), '最佳：1002 秒');
+    await tester.tap(find.byKey(const ValueKey('level-3')));
+    await tester.pump();
+    expect(best(), '最佳：0 秒');
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('wins wait for stored records and retain the fastest', (
+    tester,
+  ) async {
+    final preferences = _DelayedPreferences({'mobile.best_time.v1.1': 20});
+    SharedPreferencesAsyncPlatform.instance = preferences;
+    final api = _FakeGameApi();
+    final controller = GameController(api);
+    await controller.initialize();
+    var now = DateTime(2026, 1, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(
+            controller: controller,
+            onActionSound: (_) {},
+            now: () => now,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('最佳：读取中'), findsOneWidget);
+
+    Future<void> win(int seconds) async {
+      final id = controller.game!.id;
+      api.clickStatus = null;
+      await tester.tap(find.byKey(ValueKey('$id-0')));
+      await tester.pump();
+      now = now.add(Duration(seconds: seconds));
+      api.clickStatus = GameStatus.won;
+      await tester.tap(find.byKey(ValueKey('$id-1')));
+      await tester.pump();
+    }
+
+    await win(10);
+    await tester.tap(find.byKey(const ValueKey('restart')));
+    await tester.pump();
+    await win(3);
+    preferences.readGate.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('最佳：3 秒'), findsOneWidget);
+    expect(await SharedPreferencesAsync().getInt('mobile.best_time.v1.1'), 3);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('phone reports a best-time storage failure', (tester) async {
+    SharedPreferencesAsyncPlatform.instance = _FailingPreferences();
+    final api = _FakeGameApi(clickStatus: GameStatus.won);
+    final controller = GameController(api);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(controller: controller, onActionSound: (_) {}),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('无法保存或读取最佳成绩'), findsOneWidget);
+    expect(find.text('最佳：--'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('phone reports an invalid saved best time', (tester) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.withData({
+          'mobile.best_time.v1.1': 'invalid',
+        });
+    final controller = GameController(_FakeGameApi());
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(controller: controller, onActionSound: (_) {}),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('最佳：不可用'), findsOneWidget);
+    expect(find.textContaining('无法保存或读取最佳成绩'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
   testWidgets('phone difficulty changes board size and timer caps at 999', (
     tester,
   ) async {
@@ -579,6 +785,10 @@ void main() {
   testWidgets('advanced phone board fits short and landscape screens', (
     tester,
   ) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.withData({
+          'mobile.best_time.v1.3': 123456789,
+        });
     tester.view.physicalSize = const Size(320, 480);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -603,14 +813,64 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('level-3')));
     await tester.pump();
     expect(find.byKey(const ValueKey('game-2-139')), findsOneWidget);
+    expect(find.text('最佳：123456789 秒'), findsOneWidget);
+    void expectBestTimePosition() {
+      final timer = find.byKey(const ValueKey('timer'));
+      final bestTime = find.byKey(const ValueKey('best-time'));
+      expect(
+        tester.getCenter(bestTime).dx,
+        closeTo(tester.getCenter(timer).dx, 1),
+      );
+      expect(
+        tester.getTopLeft(bestTime).dy - tester.getBottomLeft(timer).dy,
+        inInclusiveRange(0, 4),
+      );
+      expect(
+        tester.getBottomLeft(bestTime).dy,
+        lessThanOrEqualTo(
+          tester.getTopLeft(find.byKey(const ValueKey('mobile-board'))).dy,
+        ),
+      );
+    }
+
+    expectBestTimePosition();
     expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(640, 320);
     await tester.pump();
     expect(find.byKey(const ValueKey('game-2-139')), findsOneWidget);
+    expectBestTimePosition();
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
   });
+}
+
+final class _DelayedPreferences extends InMemorySharedPreferencesAsync {
+  _DelayedPreferences(super.data) : super.withData();
+
+  final readGate = Completer<void>();
+
+  @override
+  Future<Map<String, Object>> getPreferences(
+    GetPreferencesParameters parameters,
+    SharedPreferencesOptions options,
+  ) async {
+    await readGate.future;
+    return super.getPreferences(parameters, options);
+  }
+}
+
+final class _FailingPreferences extends InMemorySharedPreferencesAsync {
+  _FailingPreferences() : super.empty();
+
+  @override
+  Future<bool> setInt(
+    String key,
+    int value,
+    SharedPreferencesOptions options,
+  ) async {
+    throw PlatformException(code: 'storage', message: 'write failed');
+  }
 }
 
 class _FakeGameApi implements GameApi {

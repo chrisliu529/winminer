@@ -74,7 +74,8 @@ Successful manual reveals and flag toggles play distinct sounds; hitting a mine
 also plays a sound, including when a solver move triggers the loss.
 The three action sounds use PCM WAV assets matched to the flag sound's RMS level.
 The timer starts with the first reveal and keeps running in the background.
-After five seconds without a manual move, a single-step solver becomes available
+Each phone difficulty's fastest win is stored locally and shown below the timer.
+After five seconds without a manual move, a hint button becomes available
 and briefly highlights a suggested cell without opening it: green is provably
 safe, while yellow is a guess. Player flags are not treated as certain mines.
 
