@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -10,6 +13,54 @@ import 'package:winminer_app/mobile_game_screen.dart';
 const _windowChannel = MethodChannel('winminer/window');
 
 void main() {
+  testWidgets('action sounds are PCM WAVs at matching levels', (tester) async {
+    final levels = <double>[];
+    for (final sound in ActionSound.values) {
+      final data = await rootBundle.load(
+        'assets/audio/${sound.name}_effect.wav',
+      );
+      expect(
+        String.fromCharCodes(data.buffer.asUint8List(data.offsetInBytes, 4)),
+        'RIFF',
+      );
+      expect(
+        String.fromCharCodes(
+          data.buffer.asUint8List(data.offsetInBytes + 8, 8),
+        ),
+        'WAVEfmt ',
+      );
+      expect(data.getUint16(20, Endian.little), 1);
+      expect(data.getUint16(22, Endian.little), 1);
+      expect(data.getUint32(24, Endian.little), 44100);
+      expect(data.getUint16(34, Endian.little), 16);
+      expect(
+        String.fromCharCodes(
+          data.buffer.asUint8List(data.offsetInBytes + 36, 4),
+        ),
+        'data',
+      );
+      final length = data.getUint32(40, Endian.little);
+      expect(length, greaterThan(0));
+      expect(length + 44, data.lengthInBytes);
+      var sumSquares = 0.0;
+      var peak = 0.0;
+      for (var offset = 44; offset < data.lengthInBytes; offset += 2) {
+        final sample = data.getInt16(offset, Endian.little) / 32768;
+        peak = math.max(peak, sample.abs());
+        sumSquares += sample * sample;
+      }
+      expect(peak, lessThan(0.99));
+      levels.add(math.sqrt(sumSquares / (length / 2)));
+    }
+    final reference = levels[ActionSound.flag.index];
+    for (final level in levels) {
+      expect(
+        (20 * math.log(level / reference) / math.ln10).abs(),
+        lessThan(0.1),
+      );
+    }
+  });
+
   test(
     'automatic steps publish game changes without control notifications',
     () async {
@@ -144,6 +195,10 @@ void main() {
 
     expect(find.text('You won!'), findsOneWidget);
     expect(find.byKey(const ValueKey('victory-fireworks')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byKey(const ValueKey('victory-fireworks')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1400));
+    expect(find.byKey(const ValueKey('victory-fireworks')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -208,7 +263,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final api = _FakeGameApi();
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(api: api, mobile: true)),
+      MaterialApp(
+        home: GameScreen(api: api, mobile: true, onActionSound: (_) {}),
+      ),
     );
     await tester.pumpAndSettle();
     final gesture = await tester.startGesture(
@@ -232,12 +289,73 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('phone solver appears after inactivity and resets on new game', (
+  testWidgets('phone plays action sounds only for successful manual moves', (
     tester,
   ) async {
     final api = _FakeGameApi();
+    final controller = GameController(api);
+    await controller.initialize();
+    final sounds = <ActionSound>[];
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(api: api, mobile: true)),
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(
+            controller: controller,
+            onActionSound: sounds.add,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal]);
+    await tester.longPress(find.byKey(const ValueKey('game-1-1')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.flag]);
+    await tester.tap(find.byKey(const ValueKey('flag-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('game-1-1')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.flag, ActionSound.flag]);
+    api.failFlag = true;
+    await tester.tap(find.byKey(const ValueKey('game-1-2')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.flag, ActionSound.flag]);
+    await tester.tap(find.byKey(const ValueKey('flag-mode')));
+    await tester.pump();
+    api.failClick = true;
+    await tester.tap(find.byKey(const ValueKey('game-1-2')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.flag, ActionSound.flag]);
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.flag, ActionSound.flag]);
+    api.failClick = false;
+    api.clickStatus = GameStatus.lost;
+    await tester.tap(find.byKey(const ValueKey('game-1-2')));
+    await tester.pump();
+    expect(sounds, [
+      ActionSound.reveal,
+      ActionSound.flag,
+      ActionSound.flag,
+      ActionSound.mine,
+    ]);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('phone solver appears after inactivity and resets on new game', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final api = _FakeGameApi();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameScreen(api: api, mobile: true, onActionSound: (_) {}),
+      ),
     );
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 6));
@@ -254,19 +372,86 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 4));
     expect(find.byKey(const ValueKey('bot-step')), findsNothing);
-    await tester.longPress(find.byKey(const ValueKey('game-1-1')));
+    await tester.longPress(find.byKey(const ValueKey('game-1-2')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));
     expect(find.byKey(const ValueKey('bot-step')), findsNothing);
     await tester.pump(const Duration(seconds: 1));
     expect(find.byKey(const ValueKey('bot-step')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('flag-mode'))).dx -
+          tester.getTopRight(find.byKey(const ValueKey('bot-step'))).dx,
+      4,
+    );
     await tester.tap(find.byKey(const ValueKey('bot-step')));
     await tester.pump();
     expect(api.botSteps, 1);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('game-1-1')),
+        matching: find.byKey(const ValueKey('solver-highlight')),
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('restart')));
     await tester.pump();
     expect(find.byKey(const ValueKey('bot-step')), findsNothing);
+    expect(find.byKey(const ValueKey('solver-highlight')), findsNothing);
     expect(find.byKey(const ValueKey('game-2-0')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('solver highlights its chosen cell even on a loss', (
+    tester,
+  ) async {
+    final api = _FakeGameApi(botStatus: GameStatus.lost, botExtraReveal: true);
+    final sounds = <ActionSound>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameScreen(api: api, mobile: true, onActionSound: sounds.add),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('game-1-0')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.tap(find.byKey(const ValueKey('bot-step')));
+    await tester.pump();
+    expect(sounds, [ActionSound.reveal, ActionSound.mine]);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('game-1-1')),
+        matching: find.byKey(const ValueKey('solver-highlight')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('game-1-2')),
+        matching: find.byKey(const ValueKey('solver-highlight')),
+      ),
+      findsNothing,
+    );
+    final initialColor =
+        (tester
+                    .widget<Container>(
+                      find.byKey(const ValueKey('solver-highlight')),
+                    )
+                    .decoration!
+                as BoxDecoration)
+            .color;
+    await tester.pump(const Duration(milliseconds: 250));
+    final pulseColor =
+        (tester
+                    .widget<Container>(
+                      find.byKey(const ValueKey('solver-highlight')),
+                    )
+                    .decoration!
+                as BoxDecoration)
+            .color;
+    expect(pulseColor, isNot(initialColor));
+    await tester.pump(const Duration(milliseconds: 751));
+    expect(find.byKey(const ValueKey('solver-highlight')), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -280,7 +465,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileGameScreen(controller: controller, now: () => now),
+          body: MobileGameScreen(
+            controller: controller,
+            onActionSound: (_) {},
+            now: () => now,
+          ),
         ),
       ),
     );
@@ -320,6 +509,7 @@ void main() {
         levels: const [
           GameLevel(level: 1, rows: 8, columns: 8, mines: 10),
           GameLevel(level: 2, rows: 10, columns: 10, mines: 20),
+          GameLevel(level: 3, rows: 14, columns: 10, mines: 36),
         ],
       ),
     );
@@ -328,7 +518,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: MobileGameScreen(controller: controller, now: () => now),
+          body: MobileGameScreen(
+            controller: controller,
+            onActionSound: (_) {},
+            now: () => now,
+          ),
         ),
       ),
     );
@@ -336,16 +530,58 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('level-2')));
     await tester.pump();
     expect(find.byKey(const ValueKey('game-2-99')), findsOneWidget);
+    final mediumCell = tester.getSize(find.byKey(const ValueKey('game-2-0')));
     expect(
       tester.getSize(find.byKey(const ValueKey('mobile-board'))).width,
       greaterThan(250),
     );
-    await tester.tap(find.byKey(const ValueKey('game-2-0')));
+    await tester.tap(find.byKey(const ValueKey('level-3')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('game-3-139')), findsOneWidget);
+    expect(find.bySemanticsLabel('036'), findsOneWidget);
+    expect(tester.getSize(find.byKey(const ValueKey('game-3-0'))), mediumCell);
+    await tester.tap(find.byKey(const ValueKey('game-3-139')));
     await tester.pump();
     now = now.add(const Duration(seconds: 1002));
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     expect(find.bySemanticsLabel('999'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('advanced phone board fits short and landscape screens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = GameController(
+      _FakeGameApi(
+        levels: const [
+          GameLevel(level: 1, rows: 8, columns: 8, mines: 10),
+          GameLevel(level: 2, rows: 10, columns: 10, mines: 20),
+          GameLevel(level: 3, rows: 14, columns: 10, mines: 36),
+        ],
+      ),
+    );
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MobileGameScreen(controller: controller, onActionSound: (_) {}),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('level-3')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('game-2-139')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(640, 320);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('game-2-139')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
@@ -357,13 +593,19 @@ class _FakeGameApi implements GameApi {
     this.levels = const [GameLevel(level: 1, rows: 2, columns: 2, mines: 1)],
     this.clickResult = const GameCell(state: CellState.revealed, value: 0),
     this.clickStatus,
+    this.botStatus,
+    this.botExtraReveal = false,
   });
 
   final List<GameLevel> levels;
   final GameCell clickResult;
   GameStatus? clickStatus;
+  final GameStatus? botStatus;
+  final bool botExtraReveal;
   int _nextGameId = 1;
   int botSteps = 0;
+  bool failClick = false;
+  bool failFlag = false;
   (int, int)? lastFlaggedCell;
   final Map<String, GameSnapshot> _games = {};
 
@@ -392,11 +634,13 @@ class _FakeGameApi implements GameApi {
 
   @override
   Future<GameSnapshot> click(String gameId, int x, int y) async {
+    if (failClick) throw StateError('Click failed');
     return _update(gameId, x, y, clickResult, status: clickStatus);
   }
 
   @override
   Future<GameSnapshot> toggleFlag(String gameId, int x, int y) async {
+    if (failFlag) throw StateError('Flag failed');
     lastFlaggedCell = (x, y);
     final game = _games[gameId]!;
     final current = game.cells[y * game.columns + x];
@@ -414,13 +658,28 @@ class _FakeGameApi implements GameApi {
   }
 
   @override
-  Future<GameSnapshot> botStep(String gameId) async {
+  Future<BotStepResult> botStep(String gameId) async {
     botSteps++;
-    return _update(
-      gameId,
-      1,
-      0,
-      const GameCell(state: CellState.revealed, value: 1),
+    if (botExtraReveal) {
+      _update(
+        gameId,
+        0,
+        1,
+        const GameCell(state: CellState.revealed, value: 0),
+      );
+    }
+    return BotStepResult(
+      game: _update(
+        gameId,
+        1,
+        0,
+        botStatus == GameStatus.lost
+            ? const GameCell(state: CellState.exploded)
+            : const GameCell(state: CellState.revealed, value: 1),
+        status: botStatus,
+      ),
+      x: 1,
+      y: 0,
     );
   }
 

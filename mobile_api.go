@@ -18,6 +18,7 @@ type mobileRequest struct {
 var phoneLevels = []levelConfig{
 	{Row: 8, Column: 8, Mine: 10},
 	{Row: 10, Column: 10, Mine: 20},
+	{Row: 14, Column: 10, Mine: 36},
 }
 
 func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{}, error) {
@@ -82,7 +83,12 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 		case "toggleFlag":
 			err = game.toggleFlag(request.X, request.Y)
 		case "botStep":
-			err = game.botStep()
+			var move coordinateRequest
+			move, err = game.botStep()
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"state": game.snapshotLocked(), "move": move}, nil
 		}
 		if err != nil {
 			return nil, err

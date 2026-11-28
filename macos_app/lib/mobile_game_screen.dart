@@ -8,9 +8,15 @@ import 'game_controller.dart';
 import 'game_models.dart';
 
 class MobileGameScreen extends StatefulWidget {
-  const MobileGameScreen({super.key, required this.controller, this.now});
+  const MobileGameScreen({
+    super.key,
+    required this.controller,
+    required this.onActionSound,
+    this.now,
+  });
 
   final GameController controller;
+  final void Function(ActionSound sound) onActionSound;
   final DateTime Function()? now;
 
   @override
@@ -18,7 +24,7 @@ class MobileGameScreen extends StatefulWidget {
 }
 
 class _MobileGameScreenState extends State<MobileGameScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final ValueNotifier<int> _elapsed = ValueNotifier(0);
   final ValueNotifier<(int, GameStatus)?> _summary = ValueNotifier(null);
   Timer? _clock;
@@ -26,13 +32,23 @@ class _MobileGameScreenState extends State<MobileGameScreen>
   DateTime? _startedAt;
   DateTime? _idleDeadline;
   String? _gameId;
+  GameStatus? _gameStatus;
   bool _showSolver = false;
   bool _flagMode = false;
+  (int, int)? _highlight;
+  late final AnimationController _highlightAnimation;
   DateTime get _now => widget.now?.call() ?? DateTime.now();
 
   @override
   void initState() {
     super.initState();
+    _highlightAnimation =
+        AnimationController(vsync: this, duration: const Duration(seconds: 1))
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed && mounted) {
+              setState(() => _highlight = null);
+            }
+          });
     WidgetsBinding.instance.addObserver(this);
     widget.controller.gameState.addListener(_gameChanged);
     _gameChanged();
@@ -40,6 +56,13 @@ class _MobileGameScreenState extends State<MobileGameScreen>
 
   void _gameChanged() {
     final game = widget.controller.game;
+    final justLost =
+        game != null &&
+        game.id == _gameId &&
+        _gameStatus == GameStatus.playing &&
+        game.status == GameStatus.lost;
+    _gameStatus = game?.status;
+    if (justLost) widget.onActionSound(ActionSound.mine);
     _summary.value = game == null ? null : (game.remainingMines, game.status);
     if (game?.id != _gameId) {
       _gameId = game?.id;
@@ -47,6 +70,8 @@ class _MobileGameScreenState extends State<MobileGameScreen>
       _idleTimer?.cancel();
       _startedAt = null;
       _idleDeadline = null;
+      _highlightAnimation.stop();
+      _highlight = null;
       _elapsed.value = 0;
       if (mounted) setState(() => _showSolver = false);
     }
@@ -109,6 +134,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
         !(flag && cell.state == CellState.flag)) {
       return;
     }
+    _clearHighlight();
     final actionTime = _now;
     if (flag) {
       await controller.toggleFlag(x, y);
@@ -117,18 +143,39 @@ class _MobileGameScreenState extends State<MobileGameScreen>
     }
     if (!mounted) return;
     final after = controller.game;
-    if (identical(before, after) || after?.id != before.id) return;
+    if (after == null || identical(before, after) || after.id != before.id) {
+      return;
+    }
+    if (after.status != GameStatus.lost) {
+      widget.onActionSound(flag ? ActionSound.flag : ActionSound.reveal);
+    }
     if (!flag && _startedAt == null) {
       _startedAt = actionTime;
       _updateElapsed();
-      if (after!.status == GameStatus.playing) {
+      if (after.status == GameStatus.playing) {
         _clock = Timer.periodic(
           const Duration(seconds: 1),
           (_) => _updateElapsed(),
         );
       }
     }
-    if (after!.status == GameStatus.playing) _scheduleSolver();
+    if (after.status == GameStatus.playing) _scheduleSolver();
+  }
+
+  void _clearHighlight() {
+    _highlightAnimation.stop();
+    if (_highlight != null) setState(() => _highlight = null);
+  }
+
+  Future<void> _solve() async {
+    final gameId = widget.controller.game?.id;
+    _clearHighlight();
+    final move = await widget.controller.botStep();
+    if (!mounted || move == null || widget.controller.game?.id != gameId) {
+      return;
+    }
+    setState(() => _highlight = move);
+    _highlightAnimation.forward(from: 0);
   }
 
   Future<void> _newGame([int? level]) async {
@@ -149,6 +196,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
     widget.controller.gameState.removeListener(_gameChanged);
     _clock?.cancel();
     _idleTimer?.cancel();
+    _highlightAnimation.dispose();
     _elapsed.dispose();
     _summary.dispose();
     super.dispose();
@@ -210,6 +258,8 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                       controller: widget.controller,
                       flagMode: _flagMode,
                       onAction: _act,
+                      highlight: _highlight,
+                      highlightAnimation: _highlightAnimation,
                     ),
                   ),
                 ),
@@ -217,11 +267,12 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                   animation: widget.controller,
                   builder: (context, _) => Row(
                     children: [
-                      for (final (index, label) in ['初级', '高级'].indexed)
+                      for (final (index, label) in ['初级', '中级', '高级'].indexed)
                         Padding(
-                          padding: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.only(right: 2),
                           child: _BevelButton(
                             key: ValueKey('level-${index + 1}'),
+                            width: 48,
                             selected:
                                 widget.controller.selectedLevel == index + 1,
                             onTap:
@@ -232,24 +283,25 @@ class _MobileGameScreenState extends State<MobileGameScreen>
                             child: Text(label),
                           ),
                         ),
-                      Expanded(
-                        child: Center(
-                          child: _showSolver
-                              ? _BevelButton(
-                                  key: const ValueKey('bot-step'),
-                                  onTap:
-                                      widget.controller.busy ||
-                                          widget.controller.game?.status !=
-                                              GameStatus.playing
-                                      ? null
-                                      : widget.controller.botStep,
-                                  child: const Text('求解'),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
+                      const Spacer(),
+                      if (_showSolver)
+                        _BevelButton(
+                          key: const ValueKey('bot-step'),
+                          width: 48,
+                          onTap:
+                              widget.controller.busy ||
+                                  widget.controller.game?.status !=
+                                      GameStatus.playing
+                              ? null
+                              : _solve,
+                          child: const Text('求解'),
+                        )
+                      else
+                        const SizedBox(width: 48),
+                      const SizedBox(width: 4),
                       _BevelButton(
                         key: const ValueKey('flag-mode'),
+                        width: 48,
                         selected: _flagMode,
                         onTap: () => setState(() => _flagMode = !_flagMode),
                         child: Text(_flagMode ? '插旗' : '挖开'),
@@ -465,11 +517,13 @@ class _BevelButton extends StatelessWidget {
     required this.child,
     this.onTap,
     this.selected = false,
+    this.width = 54,
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final bool selected;
+  final double width;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -480,7 +534,7 @@ class _BevelButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 54,
+        width: width,
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: _bevel(
@@ -500,11 +554,15 @@ class _PhoneBoard extends StatefulWidget {
     required this.controller,
     required this.flagMode,
     required this.onAction,
+    required this.highlight,
+    required this.highlightAnimation,
   });
 
   final GameController controller;
   final bool flagMode;
   final Future<void> Function(int x, int y, {required bool flag}) onAction;
+  final (int, int)? highlight;
+  final Animation<double> highlightAnimation;
 
   @override
   State<_PhoneBoard> createState() => _PhoneBoardState();
@@ -559,15 +617,17 @@ class _PhoneBoardState extends State<_PhoneBoard> {
     if (game == null) return const CircularProgressIndicator();
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.max(
+        final cellSize = math.max(
           0.0,
-          math.min(constraints.maxWidth, constraints.maxHeight) - 8,
+          math.min(
+            (constraints.maxWidth - 8) / game.columns,
+            (constraints.maxHeight - 8) / game.rows,
+          ),
         );
-        final cellSize = size / game.columns;
         return Container(
           key: const ValueKey('mobile-board'),
-          width: size + 8,
-          height: size + 8,
+          width: cellSize * game.columns + 8,
+          height: cellSize * game.rows + 8,
           decoration: _bevel(const Color(0xffb0b0b0), pressed: true),
           padding: const EdgeInsets.all(1),
           child: GridView.builder(
@@ -591,6 +651,9 @@ class _PhoneBoardState extends State<_PhoneBoard> {
                   enabled: game.status == GameStatus.playing,
                   onTap: () => widget.onAction(x, y, flag: widget.flagMode),
                   onFlag: () => widget.onAction(x, y, flag: true),
+                  highlight: widget.highlight == (x, y)
+                      ? widget.highlightAnimation
+                      : null,
                 ),
               );
             },
@@ -610,6 +673,7 @@ class _PhoneCell extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     required this.onFlag,
+    required this.highlight,
   });
 
   final GameCell cell;
@@ -619,6 +683,7 @@ class _PhoneCell extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
   final VoidCallback onFlag;
+  final Animation<double>? highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -670,27 +735,58 @@ class _PhoneCell extends StatelessWidget {
                       : const Color(0xffbdbdbd),
                   border: Border.all(color: const Color(0xff888888), width: .5),
                 ),
-          child: switch (cell.state) {
-            CellState.unknown => const SizedBox.shrink(),
-            CellState.flag => Icon(
-              Icons.flag,
-              color: Colors.red.shade800,
-              size: size * .65,
-            ),
-            CellState.mine || CellState.exploded => CustomPaint(
-              size: Size.square(size * .65),
-              painter: const _BombPainter(),
-            ),
-            CellState.revealed => Text(
-              cell.value == 0 ? '' : '${cell.value}',
-              style: TextStyle(
-                fontSize: size * .55,
-                fontWeight: FontWeight.bold,
-                color: color,
-                height: 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: switch (cell.state) {
+                  CellState.unknown => const SizedBox.shrink(),
+                  CellState.flag => Icon(
+                    Icons.flag,
+                    color: Colors.red.shade800,
+                    size: size * .65,
+                  ),
+                  CellState.mine || CellState.exploded => CustomPaint(
+                    size: Size.square(size * .65),
+                    painter: const _BombPainter(),
+                  ),
+                  CellState.revealed => Text(
+                    cell.value == 0 ? '' : '${cell.value}',
+                    style: TextStyle(
+                      fontSize: size * .55,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      height: 1,
+                    ),
+                  ),
+                },
               ),
-            ),
-          },
+              if (highlight != null)
+                IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: highlight!,
+                    builder: (context, _) {
+                      final pulse =
+                          (1 - math.cos(highlight!.value * math.pi * 4)) / 2;
+                      return Container(
+                        key: const ValueKey('solver-highlight'),
+                        decoration: BoxDecoration(
+                          color: Colors.yellow.withValues(
+                            alpha: 0.15 + pulse * 0.35,
+                          ),
+                          border: Border.all(
+                            color: Colors.orange.withValues(
+                              alpha: 0.45 + pulse * 0.55,
+                            ),
+                            width: 3,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

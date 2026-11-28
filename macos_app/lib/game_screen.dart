@@ -12,10 +12,16 @@ import 'game_models.dart';
 import 'mobile_game_screen.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, required this.api, this.mobile});
+  const GameScreen({
+    super.key,
+    required this.api,
+    this.mobile,
+    this.onActionSound,
+  });
 
   final GameApi api;
   final bool? mobile;
+  final void Function(ActionSound sound)? onActionSound;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -44,6 +50,8 @@ class _GameScreenState extends State<GameScreen>
   late final GameController _controller;
   late final AnimationController _fireworksController;
   AudioPlayer? _victoryPlayer;
+  final Map<ActionSound, Future<AudioPool?>> _actionSoundPools = {};
+  final Set<Future<void>> _pendingSoundStarts = {};
   late final CustomPainter _fireworksPainter;
   int? _windowRows;
   int? _windowColumns;
@@ -58,14 +66,94 @@ class _GameScreenState extends State<GameScreen>
     WidgetsBinding.instance.addObserver(this);
     _fireworksController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: const Duration(milliseconds: 4300),
       value: 1,
     )..addStatusListener(_handleFireworksStatus);
     _victoryPlayer = AudioPlayer();
     _fireworksPainter = _FireworksPainter(animation: _fireworksController);
     _controller = GameController(widget.api);
     _controller.gameState.addListener(_handleGameChanged);
+    if ((widget.mobile ?? (Platform.isIOS || Platform.isAndroid)) &&
+        widget.onActionSound == null) {
+      for (final sound in ActionSound.values) {
+        unawaited(_actionSoundPool(sound));
+      }
+    }
     unawaited(_controller.initialize());
+  }
+
+  Future<AudioPool?> _actionSoundPool(ActionSound sound) {
+    return _actionSoundPools.putIfAbsent(
+      sound,
+      () => _createActionSoundPool(sound),
+    );
+  }
+
+  Future<AudioPool?> _createActionSoundPool(ActionSound sound) async {
+    AudioPool? pool;
+    await _handleActionSoundErrors(() async {
+      pool = await AudioPool.createFromAsset(
+        path: 'audio/${sound.name}_effect.wav',
+        maxPlayers: 3,
+      );
+    });
+    if (pool == null && mounted) {
+      _actionSoundPools.remove(sound);
+    }
+    return pool;
+  }
+
+  void _playActionSound(ActionSound sound) {
+    final start = _handleActionSoundErrors(() async {
+      final pool = await _actionSoundPool(sound);
+      if (mounted && pool != null) {
+        await pool.start();
+      }
+    });
+    _pendingSoundStarts.add(start);
+    unawaited(start.whenComplete(() => _pendingSoundStarts.remove(start)));
+  }
+
+  Future<void> _handleActionSoundErrors(Future<void> Function() action) async {
+    try {
+      await action();
+    } on AudioPlayerException catch (error) {
+      _reportActionSoundError(error);
+    } on PlatformException catch (error) {
+      _reportActionSoundError(error);
+    } on MissingPluginException catch (error) {
+      _reportActionSoundError(error);
+    } on TimeoutException catch (error) {
+      _reportActionSoundError(error);
+    } on FlutterError catch (error) {
+      _reportActionSoundError(error);
+    } on FileSystemException catch (error) {
+      _reportActionSoundError(error);
+    }
+  }
+
+  void _reportActionSoundError(Object error) {
+    if (!mounted) {
+      debugPrint('Unable to play action sound: $error');
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Unable to play action sound: $error')),
+    );
+  }
+
+  Future<void> _disposeActionSoundPool(Future<AudioPool?> future) async {
+    await _handleActionSoundErrors(() async {
+      final pool = await future;
+      if (pool != null) await pool.dispose();
+    });
+  }
+
+  Future<void> _disposeActionSounds() async {
+    await Future.wait(_pendingSoundStarts.toList());
+    for (final pool in _actionSoundPools.values) {
+      await _disposeActionSoundPool(pool);
+    }
   }
 
   void _handleGameChanged() {
@@ -127,6 +215,7 @@ class _GameScreenState extends State<GameScreen>
     _fireworksController.dispose();
     final victoryPlayer = _victoryPlayer;
     if (victoryPlayer != null) unawaited(victoryPlayer.dispose());
+    unawaited(_disposeActionSounds());
     super.dispose();
   }
 
@@ -143,7 +232,10 @@ class _GameScreenState extends State<GameScreen>
       body: Stack(
         children: [
           if (mobile)
-            MobileGameScreen(controller: _controller)
+            MobileGameScreen(
+              controller: _controller,
+              onActionSound: widget.onActionSound ?? _playActionSound,
+            )
           else
             SafeArea(
               child: Center(
@@ -252,9 +344,13 @@ class _FireworksPainter extends CustomPainter {
   final Animation<double> animation;
 
   static const _centers = [
-    Offset(0.2, 0.24),
-    Offset(0.8, 0.25),
-    Offset(0.5, 0.4),
+    Offset(0.22, 0.25),
+    Offset(0.78, 0.27),
+    Offset(0.5, 0.38),
+    Offset(0.13, 0.52),
+    Offset(0.85, 0.53),
+    Offset(0.35, 0.29),
+    Offset(0.65, 0.35),
   ];
   static const _colors = [
     Color(0xffffd166),
@@ -269,12 +365,12 @@ class _FireworksPainter extends CustomPainter {
     final random = math.Random(27);
     return [
       for (var burst = 0; burst < _centers.length; burst++)
-        for (var index = 0; index < 32; index++)
+        for (var index = 0; index < 56; index++)
           _FireworkParticle(
             center: _centers[burst],
-            angle: 2 * math.pi * index / 32 + random.nextDouble() * 0.08,
-            distance: 0.55 + random.nextDouble() * 0.45,
-            delay: burst * 0.17,
+            angle: 2 * math.pi * index / 56 + random.nextDouble() * 0.08,
+            distance: 0.45 + random.nextDouble() * 0.55,
+            delay: burst * 0.09,
             color: _colors[(index + burst * 2) % _colors.length],
           ),
     ];
@@ -286,7 +382,7 @@ class _FireworksPainter extends CustomPainter {
     if (shortestSide <= 0) return;
 
     for (final particle in _particles) {
-      final progress = ((animation.value - particle.delay) / 0.58)
+      final progress = ((animation.value - particle.delay) / 0.44)
           .clamp(0.0, 1.0)
           .toDouble();
       if (progress <= 0 || progress >= 1) continue;
@@ -295,19 +391,31 @@ class _FireworksPainter extends CustomPainter {
         particle.center.dx * size.width,
         particle.center.dy * size.height,
       );
-      final radius = shortestSide * 0.24 * particle.distance;
-      Offset position(double amount) =>
-          origin +
-          Offset(
-            math.cos(particle.angle) * radius * amount,
-            math.sin(particle.angle) * radius * amount +
-                shortestSide * 0.1 * amount * amount,
-          );
-      final previous = position(math.max(0, progress - 0.09));
+      final radius = shortestSide * 0.34 * particle.distance;
+      Offset position(double amount) {
+        final spread = 1 - (1 - amount) * (1 - amount);
+        return origin +
+            Offset(
+              math.cos(particle.angle) * radius * spread,
+              math.sin(particle.angle) * radius * spread +
+                  shortestSide * 0.13 * amount * amount,
+            );
+      }
+
+      final previous = position(math.max(0, progress - 0.1));
       final current = position(progress);
-      final alpha = (1 - progress) * math.min(1.0, progress * 8);
+      final alpha =
+          math.min(1.0, (1 - progress) * 1.5) * math.min(1.0, progress * 10);
       final color = particle.color.withValues(alpha: alpha);
       canvas
+        ..drawLine(
+          previous,
+          current,
+          Paint()
+            ..color = color.withValues(alpha: alpha * 0.25)
+            ..strokeWidth = 6
+            ..strokeCap = StrokeCap.round,
+        )
         ..drawLine(
           previous,
           current,
@@ -316,11 +424,7 @@ class _FireworksPainter extends CustomPainter {
             ..strokeWidth = 2
             ..strokeCap = StrokeCap.round,
         )
-        ..drawCircle(
-          current,
-          1.5 + (1 - progress) * 1.5,
-          Paint()..color = color,
-        );
+        ..drawCircle(current, 2 + (1 - progress) * 2, Paint()..color = color);
     }
   }
 

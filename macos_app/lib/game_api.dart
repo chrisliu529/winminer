@@ -12,7 +12,7 @@ abstract interface class GameApi {
   Future<GameSnapshot> newGame(int level);
   Future<GameSnapshot> click(String gameId, int x, int y);
   Future<GameSnapshot> toggleFlag(String gameId, int x, int y);
-  Future<GameSnapshot> botStep(String gameId);
+  Future<BotStepResult> botStep(String gameId);
   Future<void> deleteGame(String gameId);
 }
 
@@ -76,8 +76,24 @@ class GoGameApi implements GameApi {
   }
 
   @override
-  Future<GameSnapshot> botStep(String gameId) async {
-    return _stateFrom(await _call({'action': 'botStep', 'gameId': gameId}));
+  Future<BotStepResult> botStep(String gameId) async {
+    final response = await _call({'action': 'botStep', 'gameId': gameId});
+    final game = _stateFrom(response);
+    final move = response['move'];
+    if (move is! Map ||
+        move['x'] is! int ||
+        move['y'] is! int ||
+        game.id != gameId) {
+      throw const FormatException('Go bridge returned an invalid bot move');
+    }
+    final x = move['x'] as int;
+    final y = move['y'] as int;
+    if (x < 0 || x >= game.columns || y < 0 || y >= game.rows) {
+      throw const FormatException(
+        'Go bridge returned an out-of-range bot move',
+      );
+    }
+    return BotStepResult(game: game, x: x, y: y);
   }
 
   @override

@@ -82,10 +82,16 @@ class GameController extends ChangeNotifier {
     await _runAction(() => _api.toggleFlag(current.id, x, y));
   }
 
-  Future<void> botStep({bool automated = false}) async {
+  Future<(int, int)?> botStep({bool automated = false}) async {
     final current = game;
-    if (current == null || current.status != GameStatus.playing) return;
-    await _runAction(() => _api.botStep(current.id), automated: automated);
+    if (current == null || current.status != GameStatus.playing) return null;
+    (int, int)? move;
+    await _runAction(() async {
+      final result = await _api.botStep(current.id);
+      move = (result.x, result.y);
+      return result.game;
+    }, automated: automated);
+    return move;
   }
 
   void toggleAutoPlay() {

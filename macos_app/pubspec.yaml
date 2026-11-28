@@ -22,3 +22,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/audio/victory.wav
+    - assets/audio/reveal_effect.wav
+    - assets/audio/flag_effect.wav
+    - assets/audio/mine_effect.wav

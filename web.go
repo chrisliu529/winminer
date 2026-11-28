@@ -182,7 +182,7 @@ func (s *webServer) handleGame(w http.ResponseWriter, r *http.Request) {
 	game.mu.Lock()
 	defer game.mu.Unlock()
 	if len(parts) == 5 && parts[3] == "bot" && parts[4] == "step" {
-		if err := game.botStep(); err != nil {
+		if _, err := game.botStep(); err != nil {
 			writeWebError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -334,19 +334,19 @@ func (g *webGame) toggleFlag(x, y int) error {
 	return nil
 }
 
-func (g *webGame) botStep() error {
+func (g *webGame) botStep() (coordinateRequest, error) {
 	if g.board.status != 0 {
-		return errors.New("game is already finished")
+		return coordinateRequest{}, errors.New("game is already finished")
 	}
 	x, y, ok, err := g.player.nextAction()
 	if err != nil {
-		return err
+		return coordinateRequest{}, err
 	}
 	if !ok {
-		return errors.New("bot has no available move")
+		return coordinateRequest{}, errors.New("bot has no available move")
 	}
 	if g.player.tiles[y][x].value == tsFlag {
-		return errors.New("bot selected a flagged tile")
+		return coordinateRequest{}, errors.New("bot selected a flagged tile")
 	}
 	if g.phone && !g.opened {
 		g.ensureFirstClickSafe(x, y)
@@ -354,10 +354,10 @@ func (g *webGame) botStep() error {
 	}
 	revealed, err := g.reveal(x, y)
 	if err != nil {
-		return err
+		return coordinateRequest{}, err
 	}
 	g.player.observe(revealed)
-	return nil
+	return coordinateRequest{X: x, Y: y}, nil
 }
 
 func (g *webGame) reveal(x, y int) ([]tileReveal, error) {

@@ -53,10 +53,10 @@ func TestPhoneLevelsAndFirstClickSafety(t *testing.T) {
 		t.Fatal(err)
 	}
 	levels := result.(map[string]interface{})["levels"].([]levelOption)
-	if len(levels) != 2 || levels[0] != (levelOption{1, 8, 8, 10}) || levels[1] != (levelOption{2, 10, 10, 20}) {
+	if len(levels) != 3 || levels[0] != (levelOption{1, 8, 8, 10}) || levels[1] != (levelOption{2, 10, 10, 20}) || levels[2] != (levelOption{3, 14, 10, 36}) {
 		t.Fatalf("unexpected phone levels: %+v", levels)
 	}
-	for level := 1; level <= 2; level++ {
+	for level := 1; level <= 3; level++ {
 		game, err := newRandomPhoneGame(level)
 		if err != nil {
 			t.Fatal(err)
@@ -84,9 +84,51 @@ func TestPhoneLevelsAndFirstClickSafety(t *testing.T) {
 				}
 			}
 		}
-		if mines != phoneLevels[level-1].Mine {
+		if mines != levels[level-1].Mines {
 			t.Fatalf("got %d mines", mines)
 		}
+	}
+}
+
+func TestMobileBotStepReturnsClickedCell(t *testing.T) {
+	testWebHandler(t)
+	server := newMobileServer()
+	result, err := dispatchMobileRequest(server, mobileRequest{Action: "newGame", Level: 3, Phone: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := result.(map[string]interface{})["state"].(gameSnapshot)
+	if before.Rows != 14 || before.Columns != 10 || before.Mines != 36 || before.RemainingMines != 36 {
+		t.Fatalf("unexpected advanced game: %+v", before)
+	}
+	result, err = dispatchMobileRequest(server, mobileRequest{Action: "botStep", GameID: before.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		State gameSnapshot `json:"state"`
+		Move  struct {
+			X *int `json:"x"`
+			Y *int `json:"y"`
+		} `json:"move"`
+	}
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Move.X == nil || decoded.Move.Y == nil {
+		t.Fatal("bot response must contain both coordinates")
+	}
+	x, y := *decoded.Move.X, *decoded.Move.Y
+	if x < 0 || x >= before.Columns || y < 0 || y >= before.Rows {
+		t.Fatalf("invalid bot coordinates: %d,%d", x, y)
+	}
+	index := y*before.Columns + x
+	if before.Cells[index].State != "unknown" || decoded.State.Cells[index].State != "revealed" {
+		t.Fatalf("bot move did not reveal the reported cell: before=%+v after=%+v", before.Cells[index], decoded.State.Cells[index])
 	}
 }
 

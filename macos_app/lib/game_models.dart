@@ -2,6 +2,16 @@ enum CellState { unknown, revealed, flag, exploded, mine }
 
 enum GameStatus { playing, won, lost }
 
+enum ActionSound { reveal, flag, mine }
+
+class BotStepResult {
+  const BotStepResult({required this.game, required this.x, required this.y});
+
+  final GameSnapshot game;
+  final int x;
+  final int y;
+}
+
 class GameLevel {
   const GameLevel({
     required this.level,

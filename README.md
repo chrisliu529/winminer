@@ -66,11 +66,16 @@ flutter build ios --simulator
 
 Open `macos_app/ios/Runner.xcworkspace` in Xcode to select a simulator or configure signing for a physical device.
 
-On iOS and Android the app is named Minesweeper. It offers 8×8/10-mine and
-10×10/20-mine boards, guarantees the first reveal is safe, and shows all mines
-at the end. Tap to reveal, hold for 0.4 seconds to flag, or switch to flag mode.
+On iOS and Android the app is named Minesweeper. It offers 8×8/10-mine,
+10×10/20-mine and 14-row × 10-column/36-mine boards, guarantees the first
+reveal is safe, and shows all mines at the end. Tap to reveal, hold for 0.4
+seconds to flag, or switch to flag mode.
+Successful manual reveals and flag toggles play distinct sounds; hitting a mine
+also plays a sound, including when a solver move triggers the loss.
+The three action sounds use PCM WAV assets matched to the flag sound's RMS level.
 The timer starts with the first reveal and keeps running in the background.
-After five seconds without a manual move, a single-step solver becomes available.
+After five seconds without a manual move, a single-step solver becomes available
+and briefly highlights the cell it selects.
 
 ## Web Game
 
