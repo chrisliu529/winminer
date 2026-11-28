@@ -75,7 +75,8 @@ also plays a sound, including when a solver move triggers the loss.
 The three action sounds use PCM WAV assets matched to the flag sound's RMS level.
 The timer starts with the first reveal and keeps running in the background.
 After five seconds without a manual move, a single-step solver becomes available
-and briefly highlights the cell it selects.
+and briefly highlights a suggested cell without opening it: green is provably
+safe, while yellow is a guess. Player flags are not treated as certain mines.
 
 ## Web Game
 

@@ -94,6 +94,35 @@ class GameController extends ChangeNotifier {
     return move;
   }
 
+  Future<GameHint?> hint() async {
+    final current = game;
+    if (busy || current == null || current.status != GameStatus.playing) {
+      return null;
+    }
+    busy = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final result = await _api.hint(current.id);
+      if (!identical(game, current)) return null;
+      if (result.x < 0 ||
+          result.x >= current.columns ||
+          result.y < 0 ||
+          result.y >= current.rows ||
+          current.cells[result.y * current.columns + result.x].state !=
+              CellState.unknown) {
+        throw const FormatException('Go bridge returned an invalid hint tile');
+      }
+      return result;
+    } catch (error) {
+      errorMessage = error.toString();
+      return null;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
   void toggleAutoPlay() {
     if (autoPlaying) {
       _stopAutoPlay();

@@ -35,7 +35,7 @@ class _MobileGameScreenState extends State<MobileGameScreen>
   GameStatus? _gameStatus;
   bool _showSolver = false;
   bool _flagMode = false;
-  (int, int)? _highlight;
+  GameHint? _highlight;
   late final AnimationController _highlightAnimation;
   DateTime get _now => widget.now?.call() ?? DateTime.now();
 
@@ -168,13 +168,13 @@ class _MobileGameScreenState extends State<MobileGameScreen>
   }
 
   Future<void> _solve() async {
-    final gameId = widget.controller.game?.id;
+    final game = widget.controller.game;
     _clearHighlight();
-    final move = await widget.controller.botStep();
-    if (!mounted || move == null || widget.controller.game?.id != gameId) {
+    final hint = await widget.controller.hint();
+    if (!mounted || hint == null || !identical(widget.controller.game, game)) {
       return;
     }
-    setState(() => _highlight = move);
+    setState(() => _highlight = hint);
     _highlightAnimation.forward(from: 0);
   }
 
@@ -561,7 +561,7 @@ class _PhoneBoard extends StatefulWidget {
   final GameController controller;
   final bool flagMode;
   final Future<void> Function(int x, int y, {required bool flag}) onAction;
-  final (int, int)? highlight;
+  final GameHint? highlight;
   final Animation<double> highlightAnimation;
 
   @override
@@ -651,8 +651,12 @@ class _PhoneBoardState extends State<_PhoneBoard> {
                   enabled: game.status == GameStatus.playing,
                   onTap: () => widget.onAction(x, y, flag: widget.flagMode),
                   onFlag: () => widget.onAction(x, y, flag: true),
-                  highlight: widget.highlight == (x, y)
+                  highlight:
+                      widget.highlight?.x == x && widget.highlight?.y == y
                       ? widget.highlightAnimation
+                      : null,
+                  hintKind: widget.highlight?.x == x && widget.highlight?.y == y
+                      ? widget.highlight?.kind
                       : null,
                 ),
               );
@@ -674,6 +678,7 @@ class _PhoneCell extends StatelessWidget {
     required this.onTap,
     required this.onFlag,
     required this.highlight,
+    required this.hintKind,
   });
 
   final GameCell cell;
@@ -684,6 +689,7 @@ class _PhoneCell extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFlag;
   final Animation<double>? highlight;
+  final HintKind? hintKind;
 
   @override
   Widget build(BuildContext context) {
@@ -704,7 +710,13 @@ class _PhoneCell extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled && hidden,
-      label: '$label，第${y + 1}行第${x + 1}列',
+      label:
+          '$label，第${y + 1}行第${x + 1}列'
+          '${hintKind == HintKind.safe
+              ? '，安全提示'
+              : hintKind == HintKind.guess
+              ? '，猜测提示'
+              : ''}',
       child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
         gestures: enabled && hidden
@@ -771,13 +783,17 @@ class _PhoneCell extends StatelessWidget {
                       return Container(
                         key: const ValueKey('solver-highlight'),
                         decoration: BoxDecoration(
-                          color: Colors.yellow.withValues(
-                            alpha: 0.15 + pulse * 0.35,
-                          ),
+                          color:
+                              (hintKind == HintKind.safe
+                                      ? Colors.green
+                                      : Colors.yellow)
+                                  .withValues(alpha: 0.15 + pulse * 0.35),
                           border: Border.all(
-                            color: Colors.orange.withValues(
-                              alpha: 0.45 + pulse * 0.55,
-                            ),
+                            color:
+                                (hintKind == HintKind.safe
+                                        ? Colors.green.shade800
+                                        : Colors.orange)
+                                    .withValues(alpha: 0.45 + pulse * 0.55),
                             width: 3,
                           ),
                         ),

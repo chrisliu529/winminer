@@ -13,6 +13,7 @@ abstract interface class GameApi {
   Future<GameSnapshot> click(String gameId, int x, int y);
   Future<GameSnapshot> toggleFlag(String gameId, int x, int y);
   Future<BotStepResult> botStep(String gameId);
+  Future<GameHint> hint(String gameId);
   Future<void> deleteGame(String gameId);
 }
 
@@ -94,6 +95,26 @@ class GoGameApi implements GameApi {
       );
     }
     return BotStepResult(game: game, x: x, y: y);
+  }
+
+  @override
+  Future<GameHint> hint(String gameId) async {
+    final response = await _call({'action': 'hint', 'gameId': gameId});
+    final hint = response['hint'];
+    if (response['gameId'] != gameId ||
+        hint is! Map ||
+        hint['x'] is! int ||
+        hint['y'] is! int) {
+      throw const FormatException('Go bridge returned an invalid hint');
+    }
+    final kind = switch (hint['kind']) {
+      'safe' => HintKind.safe,
+      'guess' => HintKind.guess,
+      _ => throw const FormatException(
+        'Go bridge returned an invalid hint kind',
+      ),
+    };
+    return GameHint(x: hint['x'] as int, y: hint['y'] as int, kind: kind);
   }
 
   @override

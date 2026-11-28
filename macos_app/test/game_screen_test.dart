@@ -385,7 +385,8 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('bot-step')));
     await tester.pump();
-    expect(api.botSteps, 1);
+    expect(api.hints, 1);
+    expect(api.botSteps, 0);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('game-1-1')),
@@ -401,58 +402,82 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('solver highlights its chosen cell even on a loss', (
+  for (final kind in HintKind.values) {
+    testWidgets('phone hint highlights $kind without opening a cell', (
+      tester,
+    ) async {
+      final api = _FakeGameApi(hintKind: kind);
+      final sounds = <ActionSound>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GameScreen(api: api, mobile: true, onActionSound: sounds.add),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('game-1-0')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.tap(find.byKey(const ValueKey('bot-step')));
+      await tester.pump();
+      expect(sounds, [ActionSound.reveal]);
+      expect(api.botSteps, 0);
+      expect(api.hints, 1);
+      expect(api._games['game-1']!.status, GameStatus.playing);
+      expect(api._games['game-1']!.cells[1].state, CellState.unknown);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('game-1-1')),
+          matching: find.byKey(const ValueKey('solver-highlight')),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('game-1-2')),
+          matching: find.byKey(const ValueKey('solver-highlight')),
+        ),
+        findsNothing,
+      );
+      final initialColor =
+          (tester
+                      .widget<Container>(
+                        find.byKey(const ValueKey('solver-highlight')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color;
+      expect(
+        initialColor,
+        (kind == HintKind.safe ? Colors.green : Colors.yellow).withValues(
+          alpha: 0.15,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+      final pulseColor =
+          (tester
+                      .widget<Container>(
+                        find.byKey(const ValueKey('solver-highlight')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color;
+      expect(pulseColor, isNot(initialColor));
+      await tester.pump(const Duration(milliseconds: 751));
+      expect(find.byKey(const ValueKey('solver-highlight')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('phone reports invalid hints without changing the board', (
     tester,
   ) async {
-    final api = _FakeGameApi(botStatus: GameStatus.lost, botExtraReveal: true);
-    final sounds = <ActionSound>[];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GameScreen(api: api, mobile: true, onActionSound: sounds.add),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('game-1-0')));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 5));
-    await tester.tap(find.byKey(const ValueKey('bot-step')));
-    await tester.pump();
-    expect(sounds, [ActionSound.reveal, ActionSound.mine]);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('game-1-1')),
-        matching: find.byKey(const ValueKey('solver-highlight')),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('game-1-2')),
-        matching: find.byKey(const ValueKey('solver-highlight')),
-      ),
-      findsNothing,
-    );
-    final initialColor =
-        (tester
-                    .widget<Container>(
-                      find.byKey(const ValueKey('solver-highlight')),
-                    )
-                    .decoration!
-                as BoxDecoration)
-            .color;
-    await tester.pump(const Duration(milliseconds: 250));
-    final pulseColor =
-        (tester
-                    .widget<Container>(
-                      find.byKey(const ValueKey('solver-highlight')),
-                    )
-                    .decoration!
-                as BoxDecoration)
-            .color;
-    expect(pulseColor, isNot(initialColor));
-    await tester.pump(const Duration(milliseconds: 751));
-    expect(find.byKey(const ValueKey('solver-highlight')), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
+    final controller = GameController(_FakeGameApi(hintX: 9));
+    await controller.initialize();
+    final game = controller.game;
+    await controller.hint();
+    expect(controller.errorMessage, contains('invalid hint tile'));
+    expect(identical(controller.game, game), isTrue);
+    controller.dispose();
   });
 
   testWidgets('phone timer starts on reveal, survives background and stops', (
@@ -593,17 +618,18 @@ class _FakeGameApi implements GameApi {
     this.levels = const [GameLevel(level: 1, rows: 2, columns: 2, mines: 1)],
     this.clickResult = const GameCell(state: CellState.revealed, value: 0),
     this.clickStatus,
-    this.botStatus,
-    this.botExtraReveal = false,
+    this.hintKind = HintKind.safe,
+    this.hintX = 1,
   });
 
   final List<GameLevel> levels;
   final GameCell clickResult;
   GameStatus? clickStatus;
-  final GameStatus? botStatus;
-  final bool botExtraReveal;
+  final HintKind hintKind;
+  final int hintX;
   int _nextGameId = 1;
   int botSteps = 0;
+  int hints = 0;
   bool failClick = false;
   bool failFlag = false;
   (int, int)? lastFlaggedCell;
@@ -660,27 +686,22 @@ class _FakeGameApi implements GameApi {
   @override
   Future<BotStepResult> botStep(String gameId) async {
     botSteps++;
-    if (botExtraReveal) {
-      _update(
-        gameId,
-        0,
-        1,
-        const GameCell(state: CellState.revealed, value: 0),
-      );
-    }
     return BotStepResult(
       game: _update(
         gameId,
         1,
         0,
-        botStatus == GameStatus.lost
-            ? const GameCell(state: CellState.exploded)
-            : const GameCell(state: CellState.revealed, value: 1),
-        status: botStatus,
+        const GameCell(state: CellState.revealed, value: 1),
       ),
       x: 1,
       y: 0,
     );
+  }
+
+  @override
+  Future<GameHint> hint(String gameId) async {
+    hints++;
+    return GameHint(x: hintX, y: 0, kind: hintKind);
   }
 
   @override

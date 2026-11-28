@@ -4,6 +4,16 @@ enum GameStatus { playing, won, lost }
 
 enum ActionSound { reveal, flag, mine }
 
+enum HintKind { safe, guess }
+
+class GameHint {
+  const GameHint({required this.x, required this.y, required this.kind});
+
+  final int x;
+  final int y;
+  final HintKind kind;
+}
+
 class BotStepResult {
   const BotStepResult({required this.game, required this.x, required this.y});
 

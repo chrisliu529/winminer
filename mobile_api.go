@@ -15,6 +15,12 @@ type mobileRequest struct {
 	Phone  bool   `json:"phone,omitempty"`
 }
 
+type mobileHint struct {
+	X    int    `json:"x"`
+	Y    int    `json:"y"`
+	Kind string `json:"kind"`
+}
+
 var phoneLevels = []levelConfig{
 	{Row: 8, Column: 8, Mine: 10},
 	{Row: 10, Column: 10, Mine: 20},
@@ -70,7 +76,7 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 		server.mu.Unlock()
 		game.mu.Unlock()
 		return map[string]interface{}{"ok": true}, nil
-	case "click", "toggleFlag", "botStep":
+	case "click", "toggleFlag", "botStep", "hint":
 		game, err := findMobileGame(server, request.GameID)
 		if err != nil {
 			return nil, err
@@ -78,6 +84,15 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 		game.mu.Lock()
 		defer game.mu.Unlock()
 		switch request.Action {
+		case "hint":
+			if !game.phone {
+				return nil, errors.New("hints are only available for phone games")
+			}
+			hint, err := game.hint()
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"gameId": game.id, "hint": hint}, nil
 		case "click":
 			err = game.click(request.X, request.Y)
 		case "toggleFlag":
@@ -97,6 +112,76 @@ func dispatchMobileRequest(server *webServer, request mobileRequest) (interface{
 	default:
 		return nil, fmt.Errorf("unknown action: %s", request.Action)
 	}
+}
+
+func (g *webGame) hint() (mobileHint, error) {
+	if g.board.status != 0 {
+		return mobileHint{}, errors.New("game is already finished")
+	}
+
+	// Player flags are hypotheses, not evidence that a tile contains a mine.
+	bot := newPlayer(g.player.row, g.player.col, g.board.mine, g.board.level, 0)
+	bot.random = mathrand.New(mathrand.NewSource(0))
+	for y, row := range g.player.tiles {
+		for x, tile := range row {
+			if tile.revealed {
+				bot.tiles[y][x] = tile
+			}
+		}
+	}
+	available := func(x, y int) bool {
+		return x >= 0 && x < bot.col && y >= 0 && y < bot.row &&
+			isUnknown(&g.player.tiles[y][x]) && isUnknown(&bot.tiles[y][x])
+	}
+	choose := func(kind string) (mobileHint, bool) {
+		corners := [][2]int{{0, 0}, {bot.col - 1, bot.row - 1}, {0, bot.row - 1}, {bot.col - 1, 0}}
+		for _, corner := range corners {
+			if available(corner[0], corner[1]) {
+				return mobileHint{X: corner[0], Y: corner[1], Kind: kind}, true
+			}
+		}
+		for y := 0; y < bot.row; y++ {
+			for x := 0; x < bot.col; x++ {
+				if available(x, y) {
+					return mobileHint{X: x, Y: y, Kind: kind}, true
+				}
+			}
+		}
+		return mobileHint{}, false
+	}
+
+	first, ok := choose("guess")
+	if !ok {
+		return mobileHint{}, errors.New("no available tile for a hint")
+	}
+	if !g.opened {
+		first.Kind = "safe"
+		return first, nil
+	}
+	safe, err := bot.findSafe()
+	if err != nil {
+		return mobileHint{}, err
+	}
+	for _, index := range safe {
+		x, y := toXY(index, bot.col)
+		if available(x, y) {
+			kind := "safe"
+			if bot.guessed == "isle" {
+				kind = "guess"
+			}
+			return mobileHint{X: x, Y: y, Kind: kind}, nil
+		}
+	}
+	if len(safe) == 0 {
+		x, y := bot.doGuess()
+		if available(x, y) {
+			return mobileHint{X: x, Y: y, Kind: "guess"}, nil
+		}
+	}
+	if hint, ok := choose("guess"); ok {
+		return hint, nil
+	}
+	return mobileHint{}, errors.New("no available tile for a hint")
 }
 
 func newRandomPhoneGame(level int) (*webGame, error) {
